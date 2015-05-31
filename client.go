@@ -12,21 +12,25 @@ import (
 )
 
 const (
-	clientAPIHost      = "rpc.hentaiathome.net"
-	clientAPIScheme    = "http"
-	httpGET            = "get"
-	clientAPIPath      = "clientapi.php"
-	clientBuild        = 96
-	clientVersion      = "1.2.25"
-	argClientBuild     = "clientbuild"
-	argAction          = "act"
-	argClientID        = "cid"
-	argActionArgument  = "add"
-	argActionKey       = "actkey"
-	argTime            = "acttime"
+	clientVersion = "1.2.25"
+	clientBuild   = 96
+
+	clientAPIHost   = "rpc.hentaiathome.net"
+	clientAPIScheme = "http"
+	clientAPIPath   = "clientapi.php"
+
+	argClientBuild    = "clientbuild"
+	argAction         = "act"
+	argClientID       = "cid"
+	argActionArgument = "add"
+	argActionKey      = "actkey"
+	argTime           = "acttime"
+
 	actionKeyStart     = "hentai@home"
 	actionKeyDelimiter = "-"
 	actionStart        = "client_start"
+
+	httpGET = "get"
 )
 
 type APIResponce struct {
