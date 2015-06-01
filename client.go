@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -50,11 +49,17 @@ const (
 )
 
 var (
-	ErrClientKeyExpired           = errors.New("Client key is expired")
+	// ErrClientKeyExpired timestampt drift occured
+	ErrClientKeyExpired = errors.New("Client key is expired")
+	// ErrClientFailedConnectionTest client failed to response on test correctly
 	ErrClientFailedConnectionTest = errors.New("Client failed connection test")
-	ErrClientStartupFlood         = errors.New("API flood protection enabled")
-	ErrClientOtherConnected       = errors.New("Other client is connected")
-	ErrClientUnexpectedResponse   = errors.New("Unexpected error")
+	// ErrClientStartupFlood api rpc server flood protection is enabled
+	// client should wait
+	ErrClientStartupFlood = errors.New("API flood protection enabled")
+	// ErrClientOtherConnected other client with same clientID connected
+	ErrClientOtherConnected = errors.New("Other client is connected")
+	// ErrClientUnexpectedResponse unexpected/unhandler error
+	ErrClientUnexpectedResponse = errors.New("Unexpected error")
 )
 
 // APIResponse represents response from rpc api
@@ -71,6 +76,7 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// File is hath file representation
 type File struct {
 	hash     string
 	size     int64
@@ -79,10 +85,12 @@ type File struct {
 	filetype string
 }
 
+// Path returns relative path to file
 func (f File) Path() string {
 	return path.Join(f.hash[0:2], f.String())
 }
 
+// FileFromID generates new File from provided ID
 func FileFromID(fileid string) (f File, err error) {
 	elems := strings.Split(fileid, keyStampDelimiter)
 	if len(elems) != 5 {
@@ -246,6 +254,7 @@ func (c Client) getBlacklist(d time.Duration) error {
 	return err
 }
 
+// StillAlive sends heartbeat
 func (c Client) StillAlive() error {
 	r, err := c.getResponse(actionStillAlive)
 	if err != nil {
