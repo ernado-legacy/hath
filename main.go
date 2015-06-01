@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"time"
 )
 
 var (
@@ -20,7 +21,8 @@ func main() {
 	flag.Parse()
 	fmt.Println("Hello, hath!")
 	client := NewClient(clientID, clientKey)
-	err := client.Start()
+	client.StillAlive()
+	err := client.getBlacklist(time.Hour * 24 * 365)
 	if err != nil {
 		log.Fatal(err)
 	}
