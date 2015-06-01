@@ -16,4 +16,3 @@ install:
 
 script:
  - go test -covermode=count -coverprofile=profile.cov
- - goveralls -coverprofile=profile.cov -service=travis-ci
