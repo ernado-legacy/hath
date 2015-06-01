@@ -1,8 +1,9 @@
 package main
 
 import (
-	. "github.com/smartystreets/goconvey/convey"
 	"testing"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestFileSHA1(t *testing.T) {
@@ -26,6 +27,11 @@ func TestFileID(t *testing.T) {
 			gotFileID := f.String()
 			expectedID := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
 			So(gotFileID, ShouldEqual, expectedID)
+		})
+		Convey("Path", func() {
+			expected := "07/070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
+			actual := f.Path()
+			So(expected, ShouldEqual, actual)
 		})
 		Convey("Parsing", func() {
 			fid := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
