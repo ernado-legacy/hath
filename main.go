@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const version = "0.1a"
+
 var (
 	clientID  int64
 	clientKey string
@@ -19,7 +21,10 @@ func init() {
 
 func main() {
 	flag.Parse()
-	fmt.Println("Hello, hath!")
+	fmt.Println("Hentai@Home")
+	fmt.Println("Version:", version)
+	fmt.Println("Client version:", clientVersion)
+	fmt.Println("Client build:", clientBuild)
 	client := NewClient(clientID, clientKey)
 	client.StillAlive()
 	err := client.getBlacklist(time.Hour * 24 * 365)
