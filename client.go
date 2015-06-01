@@ -160,10 +160,6 @@ func (c Client) getResponse(args ...string) (r APIResponse, err error) {
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-
-	if err = scanner.Err(); err != nil {
-		return r, err
-	}
 	if len(lines) == 0 {
 		return r, err
 	}
@@ -201,12 +197,12 @@ func (c Client) Start() error {
 	return ErrClientUnexpectedResponse
 }
 
-func (c Client) getBlacklist(d time.Duration) error {
-	duration := strconv.FormatInt(int64(d.Seconds()), 10)
-	r, err := c.getResponse(actionGetBlacklist, duration)
-	log.Println(r)
-	return err
-}
+// func (c Client) getBlacklist(d time.Duration) error {
+// 	duration := strconv.FormatInt(int64(d.Seconds()), 10)
+// 	r, err := c.getResponse(actionGetBlacklist, duration)
+// 	log.Println(r)
+// 	return err
+// }
 
 // StillAlive sends heartbeat
 func (c Client) StillAlive() error {

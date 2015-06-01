@@ -93,6 +93,37 @@ func TestClientRequest(t *testing.T) {
 			So(r.Success, ShouldBeFalse)
 		})
 		Convey("Actions", func() {
+			Convey("Still alive", func() {
+				Convey("OK", func() {
+					responce := new(http.Response)
+					body := "OK\nWelcome, master"
+					responce.StatusCode = http.StatusOK
+					responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+					c.httpClient = testClient{nil, responce, nil}
+					err := c.StillAlive()
+					So(err, ShouldBeNil)
+				})
+				Convey("Errors", func() {
+					Convey("HTTP", func() {
+						responce := new(http.Response)
+						body := "OK\nWelcome, master"
+						responce.StatusCode = http.StatusOK
+						responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+						c.httpClient = testClient{nil, responce, errors.New("test")}
+						err := c.StillAlive()
+						So(err, ShouldNotBeNil)
+					})
+					Convey("Not OK", func() {
+						responce := new(http.Response)
+						body := "FAILED\nWelcome, master"
+						responce.StatusCode = http.StatusOK
+						responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+						c.httpClient = testClient{nil, responce, nil}
+						err := c.StillAlive()
+						So(err, ShouldEqual, ErrClientUnexpectedResponse)
+					})
+				})
+			})
 			Convey("Start", func() {
 				Convey("OK", func() {
 					responce := new(http.Response)
@@ -103,14 +134,39 @@ func TestClientRequest(t *testing.T) {
 					err := c.Start()
 					So(err, ShouldBeNil)
 				})
-				Convey("Err", func() {
-					responce := new(http.Response)
-					body := "OK\nWelcome, master"
-					responce.StatusCode = http.StatusOK
-					responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
-					c.httpClient = testClient{nil, responce, errors.New("test")}
-					err := c.Start()
-					So(err, ShouldNotBeNil)
+				Convey("Errors", func() {
+					Convey("HTTP", func() {
+						responce := new(http.Response)
+						body := "OK\nWelcome, master"
+						responce.StatusCode = http.StatusOK
+						responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+						c.httpClient = testClient{nil, responce, errors.New("test")}
+						err := c.Start()
+						So(err, ShouldNotBeNil)
+					})
+					Convey("Not OK", func() {
+						responce := new(http.Response)
+						body := "FAILED\nWelcome, master"
+						responce.StatusCode = http.StatusOK
+						responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+						c.httpClient = testClient{nil, responce, nil}
+						err := c.Start()
+						So(err, ShouldNotBeNil)
+					})
+					Convey("Other", func() {
+						getError := func(body string) error {
+							responce := new(http.Response)
+							responce.StatusCode = http.StatusOK
+							responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+							c.httpClient = testClient{nil, responce, nil}
+							return c.Start()
+						}
+						So(getError("FAIL_CONNECT_TEST"), ShouldEqual, ErrClientFailedConnectionTest)
+						So(getError("FAIL_STARTUP_FLOOD"), ShouldEqual, ErrClientStartupFlood)
+						So(getError("FAIL_OTHER_CLIENT_CONNECTED"), ShouldEqual, ErrClientOtherConnected)
+						So(getError("FAIL_WTF"), ShouldEqual, ErrClientUnexpectedResponse)
+						So(getError("KEY_EXPIRED"), ShouldEqual, ErrClientKeyExpired)
+					})
 				})
 			})
 		})

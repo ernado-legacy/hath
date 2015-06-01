@@ -9,9 +9,16 @@ import (
 func TestFileSHA1(t *testing.T) {
 	filepath := "test/gopher.jpg"
 	Convey("SHA1 of file", t, func() {
-		s, err := getFileSHA1(filepath)
-		So(err, ShouldBeNil)
-		So(s, ShouldEqual, "070b45ae488fb1967aaf618561a7d6ba4d28a1c9")
+		Convey("OK", func() {
+			s, err := getFileSHA1(filepath)
+			So(err, ShouldBeNil)
+			So(s, ShouldEqual, "070b45ae488fb1967aaf618561a7d6ba4d28a1c9")
+		})
+		Convey("Not found", func() {
+			_, err := getFileSHA1(filepath + ".none")
+			So(err, ShouldNotBeNil)
+		})
+
 	})
 }
 
