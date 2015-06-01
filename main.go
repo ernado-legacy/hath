@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 )
 
 var (
@@ -19,6 +20,9 @@ func main() {
 	flag.Parse()
 	fmt.Println("Hello, hath!")
 	client := NewClient(clientID, clientKey)
-	client.printRequest(actionStart)
-	fmt.Println(client.ActionURL("test"))
+	err := client.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("started")
 }

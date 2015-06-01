@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -30,13 +32,28 @@ const (
 	actionKeyDelimiter = "-"
 	actionStart        = "client_start"
 
+	responseOK                       = "OK"
+	responseKeyExpired               = "KEY_EXPIRED"
+	responseFailConnectTest          = "FAIL_CONNECT_TEST"
+	responseFailStartupFlood         = "FAIL_STARTUP_FLOOD"
+	responseFailOtherClientConnected = "FAIL_OTHER_CLIENT_CONNECTED"
+
 	httpGET = "get"
 )
 
-type APIResponce struct {
+var (
+	ErrClientKeyExpired           = errors.New("Client key is expired")
+	ErrClientFailedConnectionTest = errors.New("Client failed connection test")
+	ErrClientStartupFlood         = errors.New("API flood protection enabled")
+	ErrClientOtherConnected       = errors.New("Other client is connected")
+	ErrClientUnexpectedResponse   = errors.New("Unexpected error")
+)
+
+// APIResponse represents response from rpc api
+type APIResponse struct {
 	Success bool
 	Message string
-	Data    string
+	Data    []string
 }
 
 // Client is api for hath rpc
@@ -89,8 +106,51 @@ func (c Client) ActionURL(action string) *url.URL {
 	return c.getURL(action)
 }
 
-func (c Client) getResponce(action string) (r APIResponce, err error) {
-	return
+func (c Client) getResponse(action string) (r APIResponse, err error) {
+	u := c.ActionURL(action)
+	res, err := c.httpClient.Get(u.String())
+	if err != nil {
+		return r, err
+	}
+	defer res.Body.Close()
+	scanner := bufio.NewScanner(res.Body)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err = scanner.Err(); err != nil {
+		return r, err
+	}
+	r.Message = lines[0]
+	r.Data = lines[1:]
+	if r.Message == responseOK {
+		r.Success = true
+	}
+	return r, err
+}
+
+// Start starts api client
+func (c Client) Start() error {
+	r, err := c.getResponse(actionStart)
+	if err != nil {
+		return err
+	}
+	if r.Success {
+		return nil
+	}
+	if strings.HasPrefix(r.Message, responseFailConnectTest) {
+		return ErrClientFailedConnectionTest
+	}
+	if strings.HasPrefix(r.Message, responseFailStartupFlood) {
+		return ErrClientStartupFlood
+	}
+	if strings.HasPrefix(r.Message, responseKeyExpired) {
+		return ErrClientKeyExpired
+	}
+	if strings.HasPrefix(r.Message, responseFailOtherClientConnected) {
+		return ErrClientOtherConnected
+	}
+	return ErrClientUnexpectedResponse
 }
 
 func (c Client) printRequest(action string) {
