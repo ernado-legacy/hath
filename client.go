@@ -66,11 +66,16 @@ type APIResponse struct {
 	Data    []string
 }
 
+// HTTPClient is underlying http client
+type HTTPClient interface {
+	Get(url string) (*http.Response, error)
+}
+
 // Client is api for hath rpc
 type Client struct {
 	id         int64
 	key        string
-	httpClient *http.Client
+	httpClient HTTPClient
 }
 
 func sInt64(i int64) string {

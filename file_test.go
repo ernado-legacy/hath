@@ -46,6 +46,7 @@ func TestFileID(t *testing.T) {
 				examples := []string{
 					"070b45ae488fb1967aaf618561a7d6ba4d28a1c9-?-1920-1080-png",
 					"kek-12345-1920-1080a-png",
+					"one-two-three",
 					"070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-pek-1080-png",
 					"070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1223-2f-png",
 				}
