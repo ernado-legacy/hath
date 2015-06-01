@@ -13,3 +13,10 @@ docker:
 
 image:
 	docker build -t hath .
+
+docker-cross:
+	docker build -t go-cross crosscompile
+	docker run -v "$(PWD)":/go/hath -w /go/hath go-cross make crosscompile
+
+cross:
+	goxc -d build -bc="windows, linux, darwin"
