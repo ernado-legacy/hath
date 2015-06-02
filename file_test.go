@@ -35,6 +35,10 @@ func TestFileID(t *testing.T) {
 			expectedID := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
 			So(gotFileID, ShouldEqual, expectedID)
 		})
+		Convey("BaseX", func() {
+			expectedID := "10JUYVz94XadJT1GdvnVp0E6x3p"
+			So(f.Basex(), ShouldEqual, expectedID)
+		})
 		Convey("Path", func() {
 			expected := "07/070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
 			actual := f.Path()

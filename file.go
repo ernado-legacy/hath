@@ -2,12 +2,16 @@ package main
 
 import (
 	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/dineshappavoo/basex"
 )
 
 // File is hath file representation
@@ -56,6 +60,13 @@ func (f File) String() string {
 		f.filetype,
 	}
 	return strings.Join(elems, keyStampDelimiter)
+}
+
+func (f File) Basex() string {
+	d, _ := hex.DecodeString(f.hash)
+	n := big.NewInt(0)
+	n.SetBytes(d)
+	return basex.Encode(n.String())
 }
 
 func getFileSHA1(name string) (hash string, err error) {
