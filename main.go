@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 )
 
 const version = "0.1a"
@@ -20,11 +19,6 @@ func init() {
 
 func main() {
 	flag.Parse()
-	fmt.Println("Hentai@Home")
-	fmt.Println("Version:", version)
-	fmt.Println("Client version:", clientVersion)
-	fmt.Println("Client build:", clientBuild)
-	client := NewClient(clientID, clientKey)
-	client.StillAlive()
-	log.Println("started")
+	fmt.Println("Hentai@Home", version)
+	NewClient(clientID, clientKey)
 }
