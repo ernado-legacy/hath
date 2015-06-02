@@ -1,0 +1,23 @@
+{
+  "name": "hath-frontend",
+  "version": "0.0.0",
+  "homepage": "https://github.com/cydev/hath",
+  "authors": [
+    "ernado@ya.ru"
+  ],
+  "description": "Frontehd for cydev/hath",
+  "keywords": [
+    "hath"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "polymer": "Polymer/polymer#^1.0.0"
+  }
+}
