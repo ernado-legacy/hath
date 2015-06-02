@@ -14,6 +14,10 @@ import (
 	"github.com/dineshappavoo/basex"
 )
 
+const (
+	keyStampEnd = "hotlinkthis"
+)
+
 // File is hath file representation
 type File struct {
 	hash     string
@@ -62,6 +66,19 @@ func (f File) String() string {
 	return strings.Join(elems, keyStampDelimiter)
 }
 
+func (f File) KeyStamp(key string, timestamp int64) string {
+	elems := []string{
+		sInt64(timestamp),
+		f.String(),
+		key,
+		keyStampEnd,
+	}
+	toHash := strings.Join(elems, keyStampDelimiter)
+	hash := sha1.Sum([]byte(toHash))
+	return fmt.Sprintf("%x", hash)[:10]
+}
+
+// Basex returns basex representation of hash
 func (f File) Basex() string {
 	d, _ := hex.DecodeString(f.hash)
 	n := big.NewInt(0)

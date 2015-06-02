@@ -35,6 +35,11 @@ func TestFileID(t *testing.T) {
 			expectedID := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
 			So(gotFileID, ShouldEqual, expectedID)
 		})
+		Convey("Keystamp", func() {
+			gotKeystamp := f.KeyStamp("key", 10666)
+			expectedKeystamp := "71cf950fcd"
+			So(gotKeystamp, ShouldEqual, expectedKeystamp)
+		})
 		Convey("BaseX", func() {
 			expectedID := "10JUYVz94XadJT1GdvnVp0E6x3p"
 			So(f.Basex(), ShouldEqual, expectedID)
