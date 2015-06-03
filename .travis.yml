@@ -10,7 +10,7 @@ before_install:
 install:
  - mkdir -p $HOME/gopath/src/cydev.ru/hath
  - rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/gopath/src/cydev.ru/hath/
- - export TRAVIS_BUILD_DIR=$HOME/gopath/src/github.com/cydev/hath
+ - export TRAVIS_BUILD_DIR=$HOME/gopath/src/cydev.ru/hath
  - cd $TRAVIS_BUILD_DIR
  - go get .
  - go get github.com/smartystreets/goconvey/convey
