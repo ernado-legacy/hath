@@ -83,16 +83,25 @@ func TestFileCache(t *testing.T) {
 		}
 		log.Println("Generated", testFilesCount, "files for", time.Now().Sub(start))
 		Convey("Init", func() {
+			// cache init
 			c := new(FileCache)
 			c.dir = testDir
+
+			// selecting random file
 			f := testFiles[mrand.Intn(testFilesCount)]
+
+			// checking that all ok
 			So(c.Check(f), ShouldBeNil)
+
+			// testing get
 			r, err := c.Get(f)
 			So(err, ShouldBeNil)
 			So(r.Close(), ShouldBeNil)
 			Convey("Delete", func() {
+				f, err := saveRandomFile(testDir)
+				So(err, ShouldBeNil)
 				So(c.Delete(f), ShouldBeNil)
-				_, err := c.Get(f)
+				_, err = c.Get(f)
 				So(err, ShouldEqual, ErrFileNotFound)
 			})
 			Convey("Add", func() {
@@ -109,7 +118,7 @@ func TestFileCache(t *testing.T) {
 				So(c.Add(f, r), ShouldBeNil)
 				r.Close()
 				Convey("Length inconsistency", func() {
-					So(c.Delete(f), ShouldBeNil)
+					// So(c.Delete(f), ShouldBeNil)
 					w, err := os.OpenFile(newpath, os.O_APPEND|os.O_WRONLY, 0600)
 					So(err, ShouldBeNil)
 					w.Write([]byte("corrupt!"))
@@ -148,6 +157,8 @@ func TestFileCache(t *testing.T) {
 						So(c.Check(f), ShouldEqual, ErrFileInconsistent)
 					})
 					Convey("Delete", func() {
+						f, err := saveRandomFile(testDir)
+						So(err, ShouldBeNil)
 						So(c.Delete(f), ShouldBeNil)
 						So(c.Check(f), ShouldEqual, ErrFileNotFound)
 					})
