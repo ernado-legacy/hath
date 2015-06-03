@@ -86,8 +86,6 @@ func TestFileCache(t *testing.T) {
 			c := new(FileCache)
 			c.dir = testDir
 			f := testFiles[mrand.Intn(testFilesCount)]
-			// r, err := c.Get(f)
-			// defer r.Close()
 			So(c.Check(f), ShouldBeNil)
 			r, err := c.Get(f)
 			So(err, ShouldBeNil)
