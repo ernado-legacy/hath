@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 
 	"cydev.ru/hath"
@@ -25,5 +27,9 @@ func main() {
 	f, err := os.Open("testestst")
 	fmt.Println(f, err, os.IsNotExist(err))
 	fmt.Println("Hentai@Home", version)
-	hath.NewClient(clientID, clientKey)
+	cache := new(hath.FileCache)
+	frontend := hath.NewDirectFrontend(cache)
+	c := hath.NewClient(clientID, clientKey)
+	s := hath.NewDefaultServer(c, frontend)
+	log.Fatal(http.ListenAndServe(":5569", s))
 }

@@ -24,7 +24,7 @@ var (
 // requests to specidif files, returning them
 // with correct headers and processing IO errors
 type Frontend interface {
-	Handle(file File, w *http.ResponseWriter) error
+	Handle(file File, w http.ResponseWriter) error
 	DirectCache
 }
 
@@ -54,6 +54,10 @@ func (d *DirectFrontend) Handle(file File, w http.ResponseWriter) error {
 	return err
 }
 
+func NewDirectFrontend(cache DirectCache) Frontend {
+	return &DirectFrontend{cache}
+}
+
 // Some boilerplate code to make DirectFrontend implement DirectCache
 // can be example for implementing other Frontend's
 
@@ -70,6 +74,11 @@ func (d *DirectFrontend) Delete(file File) error {
 // Get returns file from fontend
 func (d *DirectFrontend) Get(file File) (io.ReadCloser, error) {
 	return d.cache.Get(file)
+}
+
+// Check check da file
+func (d *DirectFrontend) Check(file File) error {
+	return d.cache.Check(file)
 }
 
 // DirectCache is engine for serving files in hath directly from block devices
