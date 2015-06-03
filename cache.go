@@ -1,7 +1,9 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"crypto/sha1"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -13,6 +15,9 @@ var (
 	ErrFileNotFound = errors.New("File not found in cache")
 	// ErrFileBadLength means that file size does not equals read size
 	ErrFileBadLength = errors.New("Bad lenght in file")
+
+	// ErrFileInconsistent should be returned if file failed to check sha1 hash
+	ErrFileInconsistent = errors.New("File has bad hash")
 )
 
 // Frontend is cache backend that should processes
@@ -73,6 +78,7 @@ type DirectCache interface {
 	Get(file File) (io.ReadCloser, error)
 	Delete(file File) error
 	Add(file File, r io.Reader) error
+	Check(file File) error
 }
 
 // FileCache serves files from disk
@@ -106,6 +112,11 @@ func (c *FileCache) path(file File) string {
 
 // Add saves file to storage
 func (c *FileCache) Add(file File, r io.Reader) error {
+	// creating directory if not exists
+	err := os.Mkdir(path.Join(c.dir, file.hash[0:2]), 0777)
+	if err != nil && !os.IsExist(err) {
+		return err
+	}
 	f, err := os.Create(c.path(file))
 	if err != nil {
 		return err
@@ -117,6 +128,30 @@ func (c *FileCache) Add(file File, r io.Reader) error {
 	// checking real and provided size
 	if n != file.size {
 		return ErrFileBadLength
+	}
+	return nil
+}
+
+// Check performs sha1 hash checking on file
+// returns nil if all ok
+func (c *FileCache) Check(file File) error {
+	f, err := os.Open(c.path(file))
+	if os.IsNotExist(err) {
+		return ErrFileNotFound
+	}
+	hasher := sha1.New()
+	n, err := io.Copy(hasher, f)
+	if err != nil {
+		return err
+	}
+	// checking real and provided size
+	if n != file.size {
+		return ErrFileBadLength
+	}
+	// checking hashes
+	hash := fmt.Sprintf("%x", hasher.Sum(nil))
+	if file.hash != hash {
+		return ErrFileInconsistent
 	}
 	return nil
 }
