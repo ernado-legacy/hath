@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 )
 
 const version = "0.1a"
@@ -19,6 +20,8 @@ func init() {
 
 func main() {
 	flag.Parse()
+	f, err := os.Open("testestst")
+	fmt.Println(f, err, os.IsNotExist(err))
 	fmt.Println("Hentai@Home", version)
 	NewClient(clientID, clientKey)
 }

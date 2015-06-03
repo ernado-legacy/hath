@@ -66,6 +66,7 @@ func (f File) String() string {
 	return strings.Join(elems, keyStampDelimiter)
 }
 
+// KeyStamp generates file key for provided timestamp
 func (f File) KeyStamp(key string, timestamp int64) string {
 	elems := []string{
 		sInt64(timestamp),
