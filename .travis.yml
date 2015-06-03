@@ -8,6 +8,10 @@ before_install:
  - export PATH=/home/travis/gopath/bin:$PATH
 
 install:
+ - mkdir -p $HOME/gopath/src/cydev.ru/hath
+ - rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/gopath/src/cydev.ru/hath/
+ - export TRAVIS_BUILD_DIR=$HOME/gopath/src/github.com/cydev/hath
+ - cd $TRAVIS_BUILD_DIR
  - go get .
  - go get github.com/smartystreets/goconvey/convey
  - go get golang.org/x/tools/cmd/cover
