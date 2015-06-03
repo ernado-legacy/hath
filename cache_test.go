@@ -86,9 +86,12 @@ func TestFileCache(t *testing.T) {
 			c := new(FileCache)
 			c.dir = testDir
 			f := testFiles[mrand.Intn(testFilesCount)]
+			// r, err := c.Get(f)
+			// defer r.Close()
+			So(c.Check(f), ShouldBeNil)
 			r, err := c.Get(f)
-			defer r.Close()
 			So(err, ShouldBeNil)
+			So(r.Close(), ShouldBeNil)
 			Convey("Delete", func() {
 				So(c.Delete(f), ShouldBeNil)
 				_, err := c.Get(f)
@@ -106,6 +109,7 @@ func TestFileCache(t *testing.T) {
 				defer r.Close()
 				So(err, ShouldBeNil)
 				So(c.Add(f, r), ShouldBeNil)
+				r.Close()
 				Convey("Length inconsistency", func() {
 					So(c.Delete(f), ShouldBeNil)
 					w, err := os.OpenFile(newpath, os.O_APPEND|os.O_WRONLY, 0600)
