@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"cydev.ru/hath"
 )
 
 const version = "0.1a"
@@ -23,5 +25,5 @@ func main() {
 	f, err := os.Open("testestst")
 	fmt.Println(f, err, os.IsNotExist(err))
 	fmt.Println("Hentai@Home", version)
-	NewClient(clientID, clientKey)
+	hath.NewClient(clientID, clientKey)
 }

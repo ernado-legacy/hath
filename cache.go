@@ -1,4 +1,4 @@
-package main
+package hath // import "cydev.ru/hath"
 
 import (
 	"errors"
@@ -20,6 +20,7 @@ var (
 // with correct headers and processing IO errors
 type Frontend interface {
 	Handle(file File, w *http.ResponseWriter) error
+	DirectCache
 }
 
 // DirectFrontend is frontend that uses DirectCache
@@ -28,6 +29,8 @@ type DirectFrontend struct {
 }
 
 // Handle request for file
+// returns ErrFileNotFound, ErrFileBadLength
+// can return unexpected errors
 func (d *DirectFrontend) Handle(file File, w http.ResponseWriter) error {
 	f, err := d.cache.Get(file)
 	if err == ErrFileNotFound {
@@ -43,11 +46,29 @@ func (d *DirectFrontend) Handle(file File, w http.ResponseWriter) error {
 	if n != file.size {
 		return ErrFileBadLength
 	}
-	w.WriteHeader(http.StatusInternalServerError)
 	return err
 }
 
-// DirectCache is engine for serving files in hath
+// Some boilerplate code to make DirectFrontend implement DirectCache
+// can be example for implementing other Frontend's
+
+// Add file to frontend
+func (d *DirectFrontend) Add(file File, r io.Reader) error {
+	return d.Add(file, r)
+}
+
+// Delete file
+func (d *DirectFrontend) Delete(file File) error {
+	return d.Delete(file)
+}
+
+// Get returns file from fontend
+func (d *DirectFrontend) Get(file File) (io.ReadCloser, error) {
+	return d.cache.Get(file)
+}
+
+// DirectCache is engine for serving files in hath directly from block devices
+// i.e. not using any redirects
 type DirectCache interface {
 	Get(file File) (io.ReadCloser, error)
 	Delete(file File) error
@@ -55,6 +76,8 @@ type DirectCache interface {
 }
 
 // FileCache serves files from disk
+// no internal buffering, caching or rate limiting is done
+// and should be implement separetaly
 type FileCache struct {
 	dir string
 }
@@ -74,6 +97,9 @@ func (c *FileCache) Delete(file File) error {
 	return os.Remove(c.path(file))
 }
 
+// path returns absolute(or relative) path
+// that starts with cache directory
+// used only internaly
 func (c *FileCache) path(file File) string {
 	return path.Join(c.dir, file.Path())
 }

@@ -1,4 +1,4 @@
-package main
+package hath // import "cydev.ru/hath"
 
 import (
 	"bytes"
