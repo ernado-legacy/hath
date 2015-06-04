@@ -27,7 +27,7 @@ type walker struct {
 
 func (w *walker) Walk(path string, info os.FileInfo, err error) error {
 	if err == nil && !info.IsDir() {
-		log.Println(info.Name(), bytefmt.ByteSize(uint64(info.Size())))
+		// log.Println(info.Name(), bytefmt.ByteSize(uint64(info.Size())))
 		w.sum += info.Size()
 		w.count++
 	}
