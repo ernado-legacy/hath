@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/pivotal-golang/bytefmt"
 )
 
 var (
@@ -25,7 +27,7 @@ type walker struct {
 
 func (w *walker) Walk(path string, info os.FileInfo, err error) error {
 	if err == nil && !info.IsDir() {
-		log.Print(info.Name(), info.Size())
+		log.Println(info.Name(), bytefmt.ByteSize(uint64(info.Size())))
 		w.sum += info.Size()
 		w.count++
 	}
@@ -39,5 +41,5 @@ func main() {
 	filepath.Walk(dir, w.Walk)
 	end := time.Now()
 	duration := end.Sub(start)
-	log.Println("count", w.count, "size", w.sum, "duration", duration)
+	log.Println("count", w.count, "size", bytefmt.ByteSize(uint64(w.sum)), "duration", duration)
 }
