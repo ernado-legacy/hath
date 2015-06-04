@@ -213,6 +213,7 @@ func (g FileGenerator) New() (f File, err error) {
 		return f, err
 	}
 	file, err := os.Create(path.Join(g.Dir, f.Path()))
+	defer file.Close()
 	if err != nil {
 		return f, err
 	}
