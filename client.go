@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -71,10 +70,21 @@ type HTTPClient interface {
 	Get(url string) (*http.Response, error)
 }
 
+// Credentials of hath client
+type Credentials struct {
+	ClientID int64
+	Key      string
+}
+
+// ClientConfig is configuration for client
+type ClientConfig struct {
+	Credentials
+	Host string
+}
+
 // Client is api for hath rpc
 type Client struct {
-	id         int64
-	key        string
+	cfg        ClientConfig
 	httpClient HTTPClient
 }
 
@@ -90,7 +100,7 @@ func (c Client) getURL(args ...string) *url.URL {
 	var (
 		action   = args[0]
 		argument = ""
-		sID      = sInt64(c.id)
+		sID      = sInt64(c.cfg.ClientID)
 		sTime    = sInt64(time.Now().Unix())
 		sBuild   = sInt64(clientBuild)
 	)
@@ -105,7 +115,7 @@ func (c Client) getURL(args ...string) *url.URL {
 		argument,
 		sID,
 		sTime,
-		c.key},
+		c.cfg.Key},
 		actionKeyDelimiter,
 	)
 	h := sha1.New()
@@ -131,21 +141,21 @@ func (c Client) ActionURL(args ...string) *url.URL {
 }
 
 func (c Client) getResponse(args ...string) (r APIResponse, err error) {
-	start := time.Now()
+	// start := time.Now()
 	u := c.ActionURL(args...)
 
 	// log request
-	defer func() {
-		end := time.Now().Sub(start)
-		status := "OK"
-		if err != nil {
-			status = err.Error()
-		}
-		if !r.Success {
-			status = "ERR"
-		}
-		log.Println(httpGET, u, end, status)
-	}()
+	// defer func() {
+	// 	end := time.Now().Sub(start)
+	// 	status := "OK"
+	// 	if err != nil {
+	// 		status = err.Error()
+	// 	}
+	// 	if !r.Success {
+	// 		status = "ERR"
+	// 	}
+	// 	log.Println(httpGET, u, end, status)
+	// }()
 
 	// perform request
 	res, err := c.httpClient.Get(u.String())
@@ -217,10 +227,12 @@ func (c Client) StillAlive() error {
 }
 
 // NewClient creates new client for api
-func NewClient(id int64, key string) *Client {
+func NewClient(cfg ClientConfig) *Client {
 	c := new(Client)
-	c.id = id
-	c.key = key
+	if len(cfg.Host) == 0 {
+		cfg.Host = clientAPIHost
+	}
+	c.cfg = cfg
 	c.httpClient = http.DefaultClient
 	return c
 }

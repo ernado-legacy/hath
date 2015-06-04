@@ -24,11 +24,11 @@ func TestFileSHA1(t *testing.T) {
 
 func TestFileID(t *testing.T) {
 	f := File{}
-	f.hash = "070b45ae488fb1967aaf618561a7d6ba4d28a1c9"
-	f.size = 12345
-	f.height = 1080
-	f.width = 1920
-	f.filetype = "png"
+	f.Hash = "070b45ae488fb1967aaf618561a7d6ba4d28a1c9"
+	f.Size = 12345
+	f.Height = 1080
+	f.Width = 1920
+	f.Type = "png"
 	Convey("File ID", t, func() {
 		Convey("Generation", func() {
 			gotFileID := f.String()
@@ -53,11 +53,11 @@ func TestFileID(t *testing.T) {
 			fid := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
 			parsed, err := FileFromID(fid)
 			So(err, ShouldBeNil)
-			So(parsed.hash, ShouldEqual, f.hash)
-			So(parsed.size, ShouldEqual, f.size)
-			So(parsed.width, ShouldEqual, f.width)
-			So(parsed.height, ShouldEqual, f.height)
-			So(parsed.filetype, ShouldEqual, f.filetype)
+			So(parsed.Hash, ShouldEqual, f.Hash)
+			So(parsed.Size, ShouldEqual, f.Size)
+			So(parsed.Width, ShouldEqual, f.Width)
+			So(parsed.Height, ShouldEqual, f.Height)
+			So(parsed.Type, ShouldEqual, f.Type)
 			Convey("Error handling", func() {
 				examples := []string{
 					"070b45ae488fb1967aaf618561a7d6ba4d28a1c9-?-1920-1080-png",

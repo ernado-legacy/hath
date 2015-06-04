@@ -29,7 +29,10 @@ func main() {
 	fmt.Println("Hentai@Home", version)
 	cache := new(hath.FileCache)
 	frontend := hath.NewDirectFrontend(cache)
-	c := hath.NewClient(clientID, clientKey)
-	s := hath.NewDefaultServer(c, frontend)
+	credentials := hath.Credentials{ClientID: clientID, Key: clientKey}
+	cfg := hath.ServerConfig{}
+	cfg.Credentials = credentials
+	cfg.Frontend = frontend
+	s := hath.NewServer(cfg)
 	log.Fatal(http.ListenAndServe(":5569", s))
 }

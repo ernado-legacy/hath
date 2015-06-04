@@ -30,7 +30,8 @@ func TestClientURL(t *testing.T) {
 		cid int64 = 666
 		key       = "123fsdyfh12344AFc"
 	)
-	c := NewClient(cid, key)
+	cfg := ClientConfig{Credentials: Credentials{cid, key}}
+	c := NewClient(cfg)
 	Convey("URL", t, func() {
 		Convey("Panic", func() {
 			So(func() {
@@ -57,8 +58,8 @@ func TestClientRequest(t *testing.T) {
 		key       = "123fsdyfh12344AFc"
 		tc  *testClient
 	)
-
-	c := NewClient(cid, key)
+	cfg := ClientConfig{Credentials: Credentials{cid, key}}
+	c := NewClient(cfg)
 	tc = new(testClient)
 	c.httpClient = tc
 	Convey("Request", t, func() {

@@ -47,7 +47,7 @@ func TestFileCache(t *testing.T) {
 		for i := 0; i < testFilesCount; i++ {
 			f, err := g.New()
 			So(err, ShouldBeNil)
-			So(f.size, ShouldNotEqual, 0)
+			So(f.Size, ShouldNotEqual, 0)
 			testFiles[i] = f
 		}
 		Convey("Init", func() {
@@ -120,7 +120,7 @@ func TestFileCache(t *testing.T) {
 						So(err, ShouldBeNil)
 						_, err = w.Write(corruptBytes)
 						So(err, ShouldBeNil)
-						So(w.Truncate(f.size), ShouldBeNil)
+						So(w.Truncate(f.Size), ShouldBeNil)
 						So(w.Close(), ShouldBeNil)
 						So(c.Check(f), ShouldEqual, ErrFileInconsistent)
 					})

@@ -22,7 +22,7 @@ type Server interface {
 
 // DefaultServer uses hard drive to respond
 type DefaultServer struct {
-	client   *Client
+	cfg      ServerConfig
 	frontend Frontend
 	e        *echo.Echo
 }
@@ -97,7 +97,7 @@ func (s *DefaultServer) handleImage(c *echo.Context) error {
 	if err != nil {
 		return c.HTML(http.StatusBadRequest, "400: bad file id")
 	}
-	expectedKeyStamp := f.KeyStamp(s.client.key, timestamp)
+	expectedKeyStamp := f.KeyStamp(s.cfg.Key, timestamp)
 	log.Println("keystamp:", keyStamp, "expected:", expectedKeyStamp)
 	if expectedKeyStamp != keyStamp {
 		return c.HTML(http.StatusForbidden, "403: bad keystamp")
@@ -111,10 +111,17 @@ func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.e.ServeHTTP(w, r)
 }
 
-func NewDefaultServer(client *Client, frontend Frontend) Server {
+// ServerConfig cfg for server
+type ServerConfig struct {
+	Credentials
+	Frontend Frontend
+}
+
+// NewServer cleares default server with provided client and frontend
+func NewServer(cfg ServerConfig) Server {
 	s := new(DefaultServer)
-	s.client = client
-	s.frontend = frontend
+	s.cfg = cfg
+	s.frontend = cfg.Frontend
 	e := echo.New()
 	e.Get("/h/:fileid/:kwds/:filename", s.handleImage)
 	s.e = e

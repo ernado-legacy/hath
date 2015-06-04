@@ -24,7 +24,9 @@ var (
 )
 
 var (
-	FileTypes  = []string{"jpg", "png", "gif"}
+	// FileTypes list for allowerd images
+	FileTypes = []string{"jpg", "png", "gif"}
+	// FileTypesN count of FileTypes
 	FileTypesN = len(FileTypes)
 )
 
@@ -56,12 +58,13 @@ func (d *DirectFrontend) Handle(file File, w http.ResponseWriter) error {
 	}
 	defer f.Close()
 	n, err := io.Copy(w, f)
-	if n != file.size {
+	if n != file.Size {
 		return ErrFileBadLength
 	}
 	return err
 }
 
+// NewDirectFrontend create direct frontend
 func NewDirectFrontend(cache DirectCache) Frontend {
 	return &DirectFrontend{cache}
 }
@@ -130,7 +133,7 @@ func (c *FileCache) path(file File) string {
 // Add saves file to storage
 func (c *FileCache) Add(file File, r io.Reader) error {
 	// creating directory if not exists
-	err := os.Mkdir(path.Join(c.dir, file.hash[0:2]), 0777)
+	err := os.Mkdir(path.Join(c.dir, file.Dir()), 0777)
 	if err != nil && !os.IsExist(err) {
 		return err
 	}
@@ -143,7 +146,7 @@ func (c *FileCache) Add(file File, r io.Reader) error {
 		return err
 	}
 	// checking real and provided size
-	if n != file.size {
+	if n != file.Size {
 		return ErrFileBadLength
 	}
 	return nil
@@ -162,17 +165,18 @@ func (c *FileCache) Check(file File) error {
 		return err
 	}
 	// checking real and provided size
-	if n != file.size {
+	if n != file.Size {
 		return ErrFileBadLength
 	}
 	// checking hashes
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))
-	if file.hash != hash {
+	if file.Hash != hash {
 		return ErrFileInconsistent
 	}
 	return nil
 }
 
+// FileGenerator is factory for random files
 type FileGenerator struct {
 	SizeMax       int64
 	SizeMin       int64
@@ -195,20 +199,20 @@ func GetHexHash(hasher SumHasher) string {
 // New generates random file and returns it
 func (g FileGenerator) New() (f File, err error) {
 	// initializing fields with random data
-	f.size = mrand.Int63n(g.SizeMax-g.SizeMin) + g.SizeMin
-	f.filetype = FileTypes[mrand.Intn(FileTypesN)]
-	f.width = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
-	f.height = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
+	f.Size = mrand.Int63n(g.SizeMax-g.SizeMin) + g.SizeMin
+	f.Type = FileTypes[mrand.Intn(FileTypesN)]
+	f.Width = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
+	f.Height = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
 
 	// generating new random file to memory
 	hasher := sha1.New()
 	buffer := new(bytes.Buffer)
 	w := io.MultiWriter(hasher, buffer)
-	_, err = io.CopyN(w, rand.Reader, f.size)
-	f.hash = GetHexHash(hasher)
+	_, err = io.CopyN(w, rand.Reader, f.Size)
+	f.Hash = GetHexHash(hasher)
 
 	// making directory if not exists
-	err = os.Mkdir(path.Join(g.Dir, f.hash[0:2]), 0777)
+	err = os.Mkdir(path.Join(g.Dir, f.Dir()), 0777)
 	if err != nil && !os.IsExist(err) {
 		return f, err
 	}
@@ -217,6 +221,6 @@ func (g FileGenerator) New() (f File, err error) {
 	if err != nil {
 		return f, err
 	}
-	_, err = io.CopyN(file, buffer, f.size)
+	_, err = io.CopyN(file, buffer, f.Size)
 	return f, err
 }

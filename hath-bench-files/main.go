@@ -1,12 +1,13 @@
 package main
 
 import (
-	"cydev.ru/hath"
 	"flag"
 	"fmt"
-	"github.com/pivotal-golang/bytefmt"
 	"log"
 	"time"
+
+	"cydev.ru/hath"
+	"github.com/pivotal-golang/bytefmt"
 )
 
 var (
@@ -58,7 +59,7 @@ func main() {
 	var total int64
 	for i = 0; i < count; i++ {
 		f := <-files
-		total += f.Size()
+		total += f.Size
 		fmt.Println(f)
 	}
 	end := time.Now()
