@@ -55,6 +55,14 @@ func (a Args) GetInt64(k string) int64 {
 	return i
 }
 
+func (a Args) String() string {
+	var elems []string
+	for k, v := range a {
+		elems = append(elems, strings.Join([]string{k, v}, argsEqual))
+	}
+	return strings.Join(elems, argsDelimiter)
+}
+
 // ParseArgs parses arguments from string
 //     arg1=val1;arg2=val2
 func ParseArgs(s string) (a Args) {
