@@ -2,17 +2,12 @@ package hath
 
 import (
 	"crypto/rand"
-	"crypto/sha1"
 	"encoding/hex"
-	"fmt"
-	"io"
 	"io/ioutil"
-	"log"
 	mrand "math/rand"
 	"os"
 	"path"
 	"testing"
-	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -34,54 +29,27 @@ func randSHA1() string {
 	return hex.EncodeToString(b)
 }
 
-func saveRandomFile(testDir string) (f File, err error) {
-	tmpFile, err := ioutil.TempFile("", randDirPrefix)
-	if err != nil {
-		return
-	}
-	defer tmpFile.Close()
-	// initializing fields with random data
-	f.size = mrand.Int63n(randFileSizeDelta) + randFileSizeMin
-	f.filetype = []string{"jpg", "png", "gif"}[mrand.Intn(3)]
-	f.width = mrand.Intn(randFileResolutionDelta) + randFileResolutionMin
-	f.height = mrand.Intn(randFileResolutionDelta) + randFileResolutionMin
-
-	// generating new random file
-	hasher := sha1.New()
-	multiWriter := io.MultiWriter(hasher, tmpFile)
-	n, err := io.CopyN(multiWriter, rand.Reader, f.size)
-	tmpFile.Close()
-	if n != f.size {
-		return f, ErrFileBadLength
-	}
-	f.hash = fmt.Sprintf("%x", hasher.Sum(nil))
-	// making directory if not exists
-	err = os.Mkdir(path.Join(testDir, f.hash[0:2]), 0777)
-	if err != nil && !os.IsExist(err) {
-		return f, err
-	}
-	newpath := path.Join(testDir, f.Path())
-	oldpath := path.Join(tmpFile.Name())
-	err = os.Rename(oldpath, newpath)
-	return f, err
-}
-
 func TestFileCache(t *testing.T) {
 	testDir, err := ioutil.TempDir("", randDirPrefix)
 	testFilesCount := 5
 	testFiles := make([]File, testFilesCount)
 	defer os.RemoveAll(testDir)
+	g := FileGenerator{
+		SizeMax:       randFileSizeMax,
+		SizeMin:       randFileSizeMin,
+		ResolutionMax: randFileResolutionMax,
+		ResolutionMin: randFileResolutionMin,
+		Dir:           testDir,
+	}
 	Convey("File cache", t, func() {
 		So(err, ShouldBeNil)
 		So(testDir, ShouldNotEqual, "")
-		start := time.Now()
 		for i := 0; i < testFilesCount; i++ {
-			f, err := saveRandomFile(testDir)
+			f, err := g.New()
 			So(err, ShouldBeNil)
 			So(f.size, ShouldNotEqual, 0)
 			testFiles[i] = f
 		}
-		log.Println("Generated", testFilesCount, "files for", time.Now().Sub(start))
 		Convey("Init", func() {
 			// cache init
 			c := new(FileCache)
@@ -98,14 +66,14 @@ func TestFileCache(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(r.Close(), ShouldBeNil)
 			Convey("Delete", func() {
-				f, err := saveRandomFile(testDir)
+				f, err := g.New()
 				So(err, ShouldBeNil)
 				So(c.Delete(f), ShouldBeNil)
 				_, err = c.Get(f)
 				So(err, ShouldEqual, ErrFileNotFound)
 			})
 			Convey("Add", func() {
-				f, err := saveRandomFile(testDir)
+				f, err := g.New()
 				So(err, ShouldBeNil)
 				oldpath := path.Join(testDir, f.Path())
 				newpath := oldpath + ".new"
@@ -157,7 +125,7 @@ func TestFileCache(t *testing.T) {
 						So(c.Check(f), ShouldEqual, ErrFileInconsistent)
 					})
 					Convey("Delete", func() {
-						f, err := saveRandomFile(testDir)
+						f, err := g.New()
 						So(err, ShouldBeNil)
 						So(c.Delete(f), ShouldBeNil)
 						So(c.Check(f), ShouldEqual, ErrFileNotFound)

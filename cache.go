@@ -1,10 +1,13 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"bytes"
+	"crypto/rand"
 	"crypto/sha1"
 	"errors"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net/http"
 	"os"
 	"path"
@@ -18,6 +21,11 @@ var (
 
 	// ErrFileInconsistent should be returned if file failed to check sha1 hash
 	ErrFileInconsistent = errors.New("File has bad hash")
+)
+
+var (
+	FileTypes  = []string{"jpg", "png", "gif"}
+	FileTypesN = len(FileTypes)
 )
 
 // Frontend is cache backend that should processes
@@ -163,4 +171,51 @@ func (c *FileCache) Check(file File) error {
 		return ErrFileInconsistent
 	}
 	return nil
+}
+
+type FileGenerator struct {
+	SizeMax       int64
+	SizeMin       int64
+	ResolutionMax int
+	ResolutionMin int
+	Dir           string
+}
+
+// SumHasher is hasher that can sum
+type SumHasher interface {
+	Sum([]byte) []byte
+}
+
+// GetHexHash extracts hexademical representation
+// from hasher
+func GetHexHash(hasher SumHasher) string {
+	return fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+// New generates random file and returns it
+func (g FileGenerator) New() (f File, err error) {
+	// initializing fields with random data
+	f.size = mrand.Int63n(g.SizeMax-g.SizeMin) + g.SizeMin
+	f.filetype = FileTypes[mrand.Intn(FileTypesN)]
+	f.width = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
+	f.height = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
+
+	// generating new random file to memory
+	hasher := sha1.New()
+	buffer := new(bytes.Buffer)
+	w := io.MultiWriter(hasher, buffer)
+	_, err = io.CopyN(w, rand.Reader, f.size)
+	f.hash = GetHexHash(hasher)
+
+	// making directory if not exists
+	err = os.Mkdir(path.Join(g.Dir, f.hash[0:2]), 0777)
+	if err != nil && !os.IsExist(err) {
+		return f, err
+	}
+	file, err := os.Create(path.Join(g.Dir, f.Path()))
+	if err != nil {
+		return f, err
+	}
+	_, err = io.CopyN(file, buffer, f.size)
+	return f, err
 }

@@ -87,6 +87,11 @@ func (f File) Basex() string {
 	return basex.Encode(n.String())
 }
 
+// Size of file in bytes
+func (f File) Size() int64 {
+	return f.size
+}
+
 func getFileSHA1(name string) (hash string, err error) {
 	f, err := os.Open(name)
 	if err != nil {
