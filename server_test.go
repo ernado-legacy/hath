@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	mw "github.com/labstack/echo/middleware"
+
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -40,6 +42,8 @@ func TestServer(t *testing.T) {
 			Dir:           testDir,
 		}
 		server := NewServer(cfg)
+		server.e.Use(mw.Logger())
+		server.e.Use(mw.Recover())
 		So(server, ShouldNotBeNil)
 		s := httptest.NewServer(server)
 		defer s.Close()

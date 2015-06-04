@@ -2,7 +2,6 @@
 package hath // import "cydev.ru/hath"
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -83,7 +82,6 @@ func (s *DefaultServer) handleImage(c *echo.Context) error {
 	fileID := c.Param("fileid")
 	args := ParseArgs(c.Param("kwds"))
 	// parsing timestamp and keystamp
-	log.Println("got request on", fileID, "with", args)
 	stamps := strings.Split(args.Get(argsKeystamp), keyStampDelimiter)
 	if len(stamps) != 2 {
 		return c.HTML(http.StatusBadRequest, "400: Bad stamp format")
@@ -97,7 +95,6 @@ func (s *DefaultServer) handleImage(c *echo.Context) error {
 	if deltaTimestamp < 0 {
 		deltaTimestamp *= -1
 	}
-	log.Println("timestamp:", timestamp, "current:", currentTimestamp, "delta:", deltaTimestamp)
 	if deltaTimestamp > timestampMaxDelta {
 		return c.HTML(http.StatusBadRequest, "400: timestamp delta is too big")
 	}
@@ -107,12 +104,10 @@ func (s *DefaultServer) handleImage(c *echo.Context) error {
 		return c.HTML(http.StatusBadRequest, "400: bad file id")
 	}
 	expectedKeyStamp := f.KeyStamp(s.cfg.Key, timestamp)
-	log.Println("keystamp:", keyStamp, "expected:", expectedKeyStamp)
 	if expectedKeyStamp != keyStamp {
 		return c.HTML(http.StatusForbidden, "403: bad keystamp")
 	}
 	err = s.frontend.Handle(f, c.Response().Writer())
-	log.Println(args, fileID, err, f)
 	return nil
 }
 
@@ -127,7 +122,7 @@ type ServerConfig struct {
 }
 
 // NewServer cleares default server with provided client and frontend
-func NewServer(cfg ServerConfig) Server {
+func NewServer(cfg ServerConfig) *DefaultServer {
 	s := new(DefaultServer)
 	s.cfg = cfg
 	s.frontend = cfg.Frontend

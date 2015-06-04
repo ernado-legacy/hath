@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	_ "net/http/pprof"
 
 	"cydev.ru/hath"
 )
@@ -24,8 +24,6 @@ func init() {
 
 func main() {
 	flag.Parse()
-	f, err := os.Open("testestst")
-	fmt.Println(f, err, os.IsNotExist(err))
 	fmt.Println("Hentai@Home", version)
 	cache := new(hath.FileCache)
 	frontend := hath.NewDirectFrontend(cache)
@@ -34,5 +32,8 @@ func main() {
 	cfg.Credentials = credentials
 	cfg.Frontend = frontend
 	s := hath.NewServer(cfg)
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	log.Fatal(http.ListenAndServe(":5569", s))
 }
