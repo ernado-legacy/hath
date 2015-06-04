@@ -1,3 +1,4 @@
+// Package hath is Hentai@Home client implementation in golang
 package hath // import "cydev.ru/hath"
 
 import (

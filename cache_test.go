@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	mrand "math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"testing"
@@ -65,6 +67,41 @@ func TestFileCache(t *testing.T) {
 			r, err := c.Get(f)
 			So(err, ShouldBeNil)
 			So(r.Close(), ShouldBeNil)
+			Convey("Frontend", func() {
+				Convey("OK", func() {
+					f, err := g.New()
+					So(err, ShouldBeNil)
+					frontend := NewDirectFrontend(c)
+					rec := httptest.NewRecorder()
+					err = frontend.Handle(f, rec)
+					So(err, ShouldBeNil)
+					So(rec.Code, ShouldEqual, http.StatusOK)
+				})
+				Convey("Not found", func() {
+					f, err := g.New()
+					So(err, ShouldBeNil)
+					f.Hash = "badbadbadbad"
+					frontend := NewDirectFrontend(c)
+					rec := httptest.NewRecorder()
+					err = frontend.Handle(f, rec)
+					So(err, ShouldEqual, ErrFileNotFound)
+					So(rec.Code, ShouldEqual, http.StatusNotFound)
+				})
+				Convey("Bad length", func() {
+					f, err := g.New()
+					So(err, ShouldBeNil)
+					newpath := path.Join(testDir, f.Path())
+					w, err := os.OpenFile(newpath, os.O_APPEND|os.O_WRONLY, 0600)
+					So(err, ShouldBeNil)
+					w.Write([]byte("corrupt!"))
+					w.Close()
+					frontend := NewDirectFrontend(c)
+					rec := httptest.NewRecorder()
+					err = frontend.Handle(f, rec)
+					So(err, ShouldEqual, ErrFileBadLength)
+					So(rec.Code, ShouldEqual, http.StatusOK)
+				})
+			})
 			Convey("Delete", func() {
 				f, err := g.New()
 				So(err, ShouldBeNil)
