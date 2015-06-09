@@ -18,10 +18,12 @@ var (
 	resMin   int
 	workers  int
 	generate bool
+	bulkSize int64
 )
 
 func init() {
 	flag.Int64Var(&count, "count", 100, "files to generate")
+	flag.Int64Var(&bulkSize, "bulk", 10000, "bulk size")
 	flag.Int64Var(&sizeMax, "size-max", 1024*100, "maximum file size in bytes")
 	flag.Int64Var(&sizeMin, "size-min", 1024*5, "minimum file size in bytes")
 	flag.IntVar(&resMax, "res-max", 1980, "maximum ephemeral resolution")
@@ -54,9 +56,26 @@ func main() {
 			files[i] = g.NewFake()
 		}
 		start := time.Now()
-		log.Println("writing")
-		if err := db.AddBatch(files); err != nil {
-			log.Fatal(err)
+		if count < bulkSize {
+			log.Println("writing")
+			if err := db.AddBatch(files); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			log.Println("writing in bulks")
+			for i = 0; i+bulkSize < count; i += bulkSize {
+				bulkstart := time.Now()
+
+				if err := db.AddBatch(files[i : i+bulkSize]); err != nil {
+					log.Fatal(err)
+				}
+
+				log.Println("from", i, "to", i+bulkSize, time.Now().Sub(bulkstart))
+			}
+			log.Println("from", i+bulkSize, "to", count)
+			if err := db.AddBatch(files[i+bulkSize:]); err != nil {
+				log.Fatal(err)
+			}
 		}
 		end := time.Now()
 		duration := end.Sub(start)
@@ -65,10 +84,12 @@ func main() {
 	}
 	log.Println("collecting")
 	start := time.Now()
+
 	n, err := db.Collect(time.Now().Add(-time.Second))
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	end := time.Now()
 	duration := end.Sub(start)
 	rate := float64(n) / duration.Seconds()
