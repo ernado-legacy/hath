@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dineshappavoo/basex"
 )
@@ -21,11 +22,12 @@ const (
 
 // File is hath file representation
 type File struct {
-	Hash   string
-	Size   int64
-	Width  int
-	Height int
-	Type   string
+	Hash      string    `json:"hash"`
+	Size      int64     `json:"size"`
+	Width     int       `json:"width"`
+	Height    int       `json:"height"`
+	Type      string    `json:"type"`
+	LastUsage time.Time `json:"last_usage"`
 }
 
 // Dir is first prefixLenght chars of file hash
@@ -36,6 +38,11 @@ func (f File) Dir() string {
 // Path returns relative path to file
 func (f File) Path() string {
 	return path.Join(f.Dir(), f.String())
+}
+
+// Use sets LastUsage to current time
+func (f *File) Use() {
+	f.LastUsage = time.Now()
 }
 
 // FileFromID generates new File from provided ID
@@ -87,10 +94,19 @@ func (f File) KeyStamp(key string, timestamp int64) string {
 
 // Basex returns basex representation of hash
 func (f File) Basex() string {
-	d, _ := hex.DecodeString(f.Hash)
+	d := f.ByteID()
 	n := big.NewInt(0)
 	n.SetBytes(d)
 	return basex.Encode(n.String())
+}
+
+// ByteID returns []byte for file hash
+func (f File) ByteID() []byte {
+	d, err := hex.DecodeString(f.Hash)
+	if err != nil {
+		panic("hath => bad id")
+	}
+	return d
 }
 
 func getFileSHA1(name string) (hash string, err error) {

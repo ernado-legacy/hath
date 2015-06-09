@@ -196,13 +196,26 @@ func GetHexHash(hasher SumHasher) string {
 	return fmt.Sprintf("%x", hasher.Sum(nil))
 }
 
-// New generates random file and returns it
-func (g FileGenerator) New() (f File, err error) {
-	// initializing fields with random data
+// NewFake generates random file without writing it on disk
+func (g FileGenerator) NewFake() (f File) {
 	f.Size = mrand.Int63n(g.SizeMax-g.SizeMin) + g.SizeMin
 	f.Type = FileTypes[mrand.Intn(FileTypesN)]
 	f.Width = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
 	f.Height = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
+	b := make([]byte, 20)
+	_, err := rand.Read(b)
+	if err != nil {
+		panic(err)
+	}
+	f.Hash = fmt.Sprintf("%x", b)
+
+	return f
+}
+
+// New generates random file and returns it
+func (g FileGenerator) New() (f File, err error) {
+	// initializing fields with random data
+	f = g.NewFake()
 
 	// generating new random file to memory
 	hasher := sha1.New()

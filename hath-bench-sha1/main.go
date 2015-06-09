@@ -38,7 +38,7 @@ type reader struct {
 
 func (r *reader) Read(b []byte) (n int, err error) {
 	var data [chunkSize]byte
-	copy(data[:], b)
+	copy(b, data[:])
 	return chunkSize, err
 }
 
@@ -50,6 +50,7 @@ func main() {
 	worker := func(wr *writer) {
 		hasher := sha1.New()
 		dst := io.MultiWriter(wr, hasher)
+		defer log.Printf("%x", hasher.Sum(nil))
 		io.Copy(dst, r)
 	}
 	for index := 0; index < *workers; index++ {

@@ -1,7 +1,6 @@
 package hath
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"time"
 
@@ -18,30 +17,18 @@ var (
 	dbOptions    = bolt.Options{Timeout: 1 * time.Second}
 )
 
-// FileRecord stores info about file
-type FileRecord struct {
-	ID        string    `json:"-"`
-	LastUsage time.Time `json:"last_usage"`
-	Size      int64     `json:"size"`
-}
-
-// ByteID returns
-func (f FileRecord) ByteID() []byte {
-	d, err := hex.DecodeString(f.ID)
-	if err != nil {
-		panic("hath => bad id")
-	}
-	return d
+type DataBase interface {
 }
 
 // DB stores info about files in cache
-type DB struct {
+type BoltDB struct {
 	db *bolt.DB
 }
 
 // NewDB new db
-func NewDB(dbPath string) (d *DB, err error) {
-	d = new(DB)
+func NewDB(dbPath string) (d *BoltDB, err error) {
+	d = new(BoltDB)
+
 	db, err := bolt.Open(dbPath, 0600, &dbOptions)
 	if err != nil {
 		return
@@ -61,10 +48,10 @@ func NewDB(dbPath string) (d *DB, err error) {
 	}
 	d.db = db
 
-	return d, err
+	return d, nil
 }
 
-func (d DB) add(f FileRecord) error {
+func (d BoltDB) add(f File) error {
 	data, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -80,7 +67,68 @@ func (d DB) add(f FileRecord) error {
 	return tx.Commit()
 }
 
-func (d DB) get(id []byte) (f FileRecord, err error) {
+// Close closes boltdb internal database
+func (d BoltDB) Close() error {
+	return d.db.Close()
+}
+
+// Add inserts file info to db
+func (d BoltDB) Add(f File) error {
+	return d.add(f)
+}
+
+// Add inserts slice of files into db
+func (d BoltDB) AddBatch(files []File) error {
+	tx, err := d.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	bucket := tx.Bucket(dbFileBucket)
+	for _, f := range files {
+		data, err := json.Marshal(f)
+		if err != nil {
+			return err
+		}
+		if err := bucket.Put(f.ByteID(), data); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// Collect removes files that LastUsage is after deadline
+func (d BoltDB) Collect(deadline time.Time) (int, error) {
+	tx, err := d.db.Begin(true)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var markedFiles [][]byte
+	var f File
+	err = tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
+		if err := json.Unmarshal(v, &f); err != nil {
+			return err
+		}
+		if f.LastUsage.Before(deadline) {
+			markedFiles = append(markedFiles, k)
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, k := range markedFiles {
+		if err := tx.Bucket(dbFileBucket).Delete(k); err != nil {
+			return 0, err
+		}
+	}
+
+	return len(markedFiles), tx.Commit()
+}
+
+func (d BoltDB) get(id []byte) (f File, err error) {
 	tx, err := d.db.Begin(false)
 	if err != nil {
 		return f, err

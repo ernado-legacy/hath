@@ -2,6 +2,7 @@ package hath // import "cydev.ru/hath"
 
 import (
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -19,6 +20,16 @@ func TestFileSHA1(t *testing.T) {
 			So(err, ShouldNotBeNil)
 		})
 
+	})
+}
+
+func TestFile(t *testing.T) {
+	Convey("File", t, func() {
+		Convey("Use", func() {
+			f := new(File)
+			f.Use()
+			So(f.LastUsage.Unix(), ShouldEqual, time.Now().Unix())
+		})
 	})
 }
 
