@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cydev.ru/hath"
+
 	"github.com/pivotal-golang/bytefmt"
 )
 
@@ -60,5 +62,5 @@ func main() {
 	bytes := bytefmt.ByteSize(w.sum)
 	speed := uint64(float64(w.sum) / duration.Seconds())
 	log.Println(duration, bytes, "total;", bytefmt.ByteSize(speed), "per second")
-
+	log.Println(processed, "is rought", bytefmt.ByteSize(hath.GetRoughCacheSize(processed)))
 }

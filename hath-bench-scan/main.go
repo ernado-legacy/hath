@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cydev.ru/hath"
+
 	"github.com/pivotal-golang/bytefmt"
 )
 
@@ -95,4 +97,5 @@ func main() {
 	matches, err := filepath.Glob(pattern)
 	duration = time.Now().Sub(start)
 	log.Println("count", len(matches), "duration", duration)
+	log.Println(len(matches), "is rought", bytefmt.ByteSize(hath.GetRoughCacheSize(int64(len(matches)))))
 }

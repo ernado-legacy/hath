@@ -69,4 +69,5 @@ func main() {
 	rate := bytefmt.ByteSize(uint64(perSecond))
 	fmt.Printf("OK for %v\n", duration)
 	fmt.Printf("%s at rate %s/s\n", totalWrote, rate)
+	log.Println(count, "is rought", bytefmt.ByteSize(hath.GetRoughCacheSize(count)))
 }

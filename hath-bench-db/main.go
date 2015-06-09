@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cydev.ru/hath"
+	"github.com/pivotal-golang/bytefmt"
 )
 
 var (
@@ -97,6 +98,6 @@ func main() {
 		rate := float64(n) / duration.Seconds()
 		fmt.Printf("Removed %d for %v at rate %f per second\n", n, duration, rate)
 	}
-
+	log.Println(count, "is rought", bytefmt.ByteSize(hath.GetRoughCacheSize(count)))
 	log.Println("OK")
 }

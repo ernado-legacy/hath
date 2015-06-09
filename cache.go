@@ -13,6 +13,10 @@ import (
 	"path"
 )
 
+const (
+	avgFileSize uint64 = 493 * 1024 // 493kb
+)
+
 var (
 	// ErrFileNotFound should be returned when file does not exist in frontend
 	ErrFileNotFound = errors.New("File not found in cache")
@@ -236,4 +240,9 @@ func (g FileGenerator) New() (f File, err error) {
 	}
 	_, err = io.CopyN(file, buffer, f.Size)
 	return f, err
+}
+
+// GetRoughCacheSize is cache size estimation based on average file size
+func GetRoughCacheSize(count int64) uint64 {
+	return avgFileSize * uint64(count)
 }
