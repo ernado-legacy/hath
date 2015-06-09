@@ -18,6 +18,7 @@ var (
 	resMin   int
 	workers  int
 	generate bool
+	collect  bool
 	bulkSize int64
 )
 
@@ -29,6 +30,7 @@ func init() {
 	flag.IntVar(&resMax, "res-max", 1980, "maximum ephemeral resolution")
 	flag.IntVar(&resMin, "res-min", 500, "minumum ephemeral resolution")
 	flag.BoolVar(&generate, "generate", false, "generate data")
+	flag.BoolVar(&collect, "collect", true, "collect old files")
 	flag.StringVar(&dbpath, "dbfile", "db.bolt", "working directory")
 }
 
@@ -73,7 +75,7 @@ func main() {
 				log.Println("from", i, "to", i+bulkSize, time.Now().Sub(bulkstart))
 			}
 			log.Println("from", i+bulkSize, "to", count)
-			if err := db.AddBatch(files[i+bulkSize:]); err != nil {
+			if err := db.AddBatch(files[i:]); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -82,17 +84,19 @@ func main() {
 		rate := float64(count) / duration.Seconds()
 		fmt.Printf("OK for %v at rate %f per second\n", duration, rate)
 	}
-	log.Println("collecting")
-	start := time.Now()
+	if collect {
+		log.Println("collecting")
+		start := time.Now()
+		n, err := db.Collect(time.Now().Add(-time.Second))
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	n, err := db.Collect(time.Now().Add(-time.Second))
-	if err != nil {
-		log.Fatal(err)
+		end := time.Now()
+		duration := end.Sub(start)
+		rate := float64(n) / duration.Seconds()
+		fmt.Printf("Removed %d for %v at rate %f per second\n", n, duration, rate)
 	}
 
-	end := time.Now()
-	duration := end.Sub(start)
-	rate := float64(n) / duration.Seconds()
-	fmt.Printf("Removed %d for %v at rate %f per second\n", n, duration, rate)
-
+	log.Println("OK")
 }

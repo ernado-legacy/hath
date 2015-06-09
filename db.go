@@ -2,6 +2,7 @@ package hath
 
 import (
 	"encoding/json"
+	"log"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -10,6 +11,7 @@ import (
 const (
 	dbDir      = "db"
 	dbFileMode = 0600
+	dbBulkSize = 10000
 )
 
 var (
@@ -79,6 +81,19 @@ func (d BoltDB) Add(f File) error {
 
 // Add inserts slice of files into db
 func (d BoltDB) AddBatch(files []File) error {
+	count := len(files)
+	if count > dbBulkSize {
+		var i int
+		for i = 0; i+dbBulkSize < count; i += dbBulkSize {
+			if err := d.AddBatch(files[i : i+dbBulkSize]); err != nil {
+				log.Fatal(err)
+			}
+		}
+		if err := d.AddBatch(files[i:]); err != nil {
+			return err
+		}
+		return nil
+	}
 	tx, err := d.db.Begin(true)
 	if err != nil {
 		return err
