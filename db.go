@@ -79,7 +79,7 @@ func (d BoltDB) Add(f File) error {
 	return d.add(f)
 }
 
-// Add inserts slice of files into db
+// AddBatch inserts slice of files into db
 func (d BoltDB) AddBatch(files []File) error {
 	count := len(files)
 	if count > dbBulkSize {
@@ -126,7 +126,7 @@ func (d BoltDB) Collect(deadline time.Time) (int, error) {
 		if err := json.Unmarshal(v, &f); err != nil {
 			return err
 		}
-		if f.LastUsage.Before(deadline) {
+		if f.LastUsageBefore(deadline) {
 			markedFiles = append(markedFiles, k)
 		}
 		return nil

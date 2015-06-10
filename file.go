@@ -3,6 +3,7 @@ package hath // import "cydev.ru/hath"
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -18,21 +19,77 @@ import (
 const (
 	keyStampEnd  = "hotlinkthis"
 	prefixLenght = 2
+	// HashSize is length of sha1 hash in bytes
+	HashSize = 20
 )
+
+// FileType represents file format of image
+type FileType byte
+
+func (f FileType) String() string {
+	if f == JPG {
+		return "jpg"
+	}
+	if f == PNG {
+		return "png"
+	}
+	if f == GIF {
+		return "gif"
+	}
+	return "tmp"
+}
+
+const (
+	// JPG image
+	JPG FileType = iota
+	// PNG image
+	PNG
+	// GIF animation
+	GIF
+	// UnknownImage is not supported format
+	UnknownImage
+)
+
+var (
+	// ErrFileTypeUnknown when FileType is UnknownImage
+	ErrFileTypeUnknown = errors.New("hath => file type unknown")
+	// ErrHashBadLength when hash size is not HashSize
+	ErrHashBadLength = errors.New("hath => hash of image has bad length")
+)
+
+// ParseFileType returns FileType from string
+func ParseFileType(filetype string) FileType {
+	filetype = strings.ToLower(filetype)
+	if filetype == "jpg" || filetype == "jpeg" {
+		return JPG
+	}
+	if filetype == "png" {
+		return PNG
+	}
+	if filetype == "gif" {
+		return GIF
+	}
+	return UnknownImage
+}
 
 // File is hath file representation
 type File struct {
-	Hash      string    `json:"hash"`
-	Size      int64     `json:"size"`
-	Width     int       `json:"width"`
-	Height    int       `json:"height"`
-	Type      string    `json:"type"`
-	LastUsage time.Time `json:"last_usage"`
+	Hash      [HashSize]byte `json:"hash"`
+	Size      int64          `json:"size"`
+	Width     int            `json:"width"`
+	Height    int            `json:"height"`
+	Type      FileType       `json:"type"`
+	LastUsage int64          `json:"last_usage"`
+}
+
+// LastUsageBefore returns true, if last usage occured before deadline t
+func (f File) LastUsageBefore(t time.Time) bool {
+	return t.Unix() < f.LastUsage
 }
 
 // Dir is first prefixLenght chars of file hash
 func (f File) Dir() string {
-	return f.Hash[:prefixLenght]
+	return f.HexID()[:prefixLenght]
 }
 
 // Path returns relative path to file
@@ -42,7 +99,25 @@ func (f File) Path() string {
 
 // Use sets LastUsage to current time
 func (f *File) Use() {
-	f.LastUsage = time.Now()
+	f.LastUsage = time.Now().Unix()
+}
+
+// HexID returns hex representation of hash
+func (f File) HexID() string {
+	return fmt.Sprintf("%x", f.Hash)
+}
+
+// SetHash sets hash from string
+func (f *File) SetHash(s string) error {
+	hash, err := hex.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	if len(hash) != HashSize {
+		return ErrHashBadLength
+	}
+	copy(f.Hash[:], hash[:HashSize])
+	return nil
 }
 
 // FileFromID generates new File from provided ID
@@ -51,7 +126,9 @@ func FileFromID(fileid string) (f File, err error) {
 	if len(elems) != 5 {
 		return f, io.ErrUnexpectedEOF
 	}
-	f.Hash = elems[0]
+	if err = f.SetHash(elems[0]); err != nil {
+		return
+	}
 	f.Size, err = strconv.ParseInt(elems[1], 10, 64)
 	if err != nil {
 		return
@@ -64,17 +141,17 @@ func FileFromID(fileid string) (f File, err error) {
 	if err != nil {
 		return
 	}
-	f.Type = elems[4]
+	f.Type = ParseFileType(elems[4])
 	return f, err
 }
 
 func (f File) String() string {
 	elems := []string{
-		f.Hash,
+		f.HexID(),
 		sInt64(f.Size),
 		strconv.Itoa(f.Width),
 		strconv.Itoa(f.Height),
-		f.Type,
+		f.Type.String(),
 	}
 	return strings.Join(elems, keyStampDelimiter)
 }
@@ -102,11 +179,7 @@ func (f File) Basex() string {
 
 // ByteID returns []byte for file hash
 func (f File) ByteID() []byte {
-	d, err := hex.DecodeString(f.Hash)
-	if err != nil {
-		panic("hath => bad id")
-	}
-	return d
+	return f.Hash[:]
 }
 
 func getFileSHA1(name string) (hash string, err error) {

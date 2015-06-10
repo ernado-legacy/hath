@@ -1,6 +1,7 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"io"
@@ -74,7 +75,7 @@ func TestServer(t *testing.T) {
 			hash := sha1.New()
 			_, err = io.CopyN(hash, res.Body, f.Size)
 			So(err, ShouldBeNil)
-			So(GetHexHash(hash), ShouldEqual, f.Hash)
+			So(bytes.Equal(hash.Sum(nil), f.ByteID()), ShouldBeTrue)
 		})
 	})
 }

@@ -173,8 +173,7 @@ func (c *FileCache) Check(file File) error {
 		return ErrFileBadLength
 	}
 	// checking hashes
-	hash := fmt.Sprintf("%x", hasher.Sum(nil))
-	if file.Hash != hash {
+	if !bytes.Equal(file.ByteID(), hasher.Sum(nil)) {
 		return ErrFileInconsistent
 	}
 	return nil
@@ -203,7 +202,7 @@ func GetHexHash(hasher SumHasher) string {
 // NewFake generates random file without writing it on disk
 func (g FileGenerator) NewFake() (f File) {
 	f.Size = mrand.Int63n(g.SizeMax-g.SizeMin) + g.SizeMin
-	f.Type = FileTypes[mrand.Intn(FileTypesN)]
+	f.Type = FileType(mrand.Intn(int(UnknownImage)))
 	f.Width = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
 	f.Height = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
 	b := make([]byte, 20)
@@ -211,7 +210,7 @@ func (g FileGenerator) NewFake() (f File) {
 	if err != nil {
 		panic(err)
 	}
-	f.Hash = fmt.Sprintf("%x", b)
+	copy(f.Hash[:], b)
 
 	return f
 }
@@ -226,7 +225,7 @@ func (g FileGenerator) New() (f File, err error) {
 	buffer := new(bytes.Buffer)
 	w := io.MultiWriter(hasher, buffer)
 	_, err = io.CopyN(w, rand.Reader, f.Size)
-	f.Hash = GetHexHash(hasher)
+	copy(f.Hash[:], hasher.Sum(nil))
 
 	// making directory if not exists
 	err = os.Mkdir(path.Join(g.Dir, f.Dir()), 0777)

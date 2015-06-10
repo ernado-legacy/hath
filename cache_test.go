@@ -80,7 +80,7 @@ func TestFileCache(t *testing.T) {
 				Convey("Not found", func() {
 					f, err := g.New()
 					So(err, ShouldBeNil)
-					f.Hash = "badbadbadbad"
+					f.SetHash("070b45aebadfb1967bad618bada7d6ba4d28a1c9")
 					frontend := NewDirectFrontend(c)
 					rec := httptest.NewRecorder()
 					err = frontend.Handle(f, rec)

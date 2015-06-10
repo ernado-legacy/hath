@@ -28,19 +28,20 @@ func TestFile(t *testing.T) {
 		Convey("Use", func() {
 			f := new(File)
 			f.Use()
-			So(f.LastUsage.Unix(), ShouldEqual, time.Now().Unix())
+			So(f.LastUsage, ShouldEqual, time.Now().Unix())
 		})
 	})
 }
 
 func TestFileID(t *testing.T) {
 	f := File{}
-	f.Hash = "070b45ae488fb1967aaf618561a7d6ba4d28a1c9"
+
 	f.Size = 12345
 	f.Height = 1080
 	f.Width = 1920
-	f.Type = "png"
+	f.Type = PNG
 	Convey("File ID", t, func() {
+		So(f.SetHash("070b45ae488fb1967aaf618561a7d6ba4d28a1c9"), ShouldBeNil)
 		Convey("Generation", func() {
 			gotFileID := f.String()
 			expectedID := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
