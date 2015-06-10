@@ -4,6 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"cydev.ru/hath"
@@ -11,16 +16,19 @@ import (
 )
 
 var (
-	count    int64
-	dbpath   string
-	sizeMax  int64
-	sizeMin  int64
-	resMax   int
-	resMin   int
-	workers  int
-	generate bool
-	collect  bool
-	bulkSize int64
+	count      int64
+	dbpath     string
+	sizeMax    int64
+	sizeMin    int64
+	resMax     int
+	resMin     int
+	workers    int
+	generate   bool
+	cpus       int
+	collect    bool
+	bulkSize   int64
+	onlyOpen   bool
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
 func init() {
@@ -32,16 +40,31 @@ func init() {
 	flag.IntVar(&resMin, "res-min", 500, "minumum ephemeral resolution")
 	flag.BoolVar(&generate, "generate", false, "generate data")
 	flag.BoolVar(&collect, "collect", true, "collect old files")
+	flag.BoolVar(&onlyOpen, "only-open", false, "only open db")
 	flag.StringVar(&dbpath, "dbfile", "db.bolt", "working directory")
+	flag.IntVar(&cpus, "cpus", runtime.GOMAXPROCS(0), "cpu to use")
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	flag.Parse()
+	runtime.GOMAXPROCS(cpus)
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	g := hath.FileGenerator{
 		SizeMax:       sizeMax,
 		SizeMin:       sizeMin,
 		ResolutionMax: resMax,
 		ResolutionMin: resMin,
+		TimeDelta:     20,
 	}
 	db, err := hath.NewDB(dbpath)
 	defer db.Close()
@@ -53,6 +76,21 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("average file info is", len(d), "bytes")
+	if onlyOpen {
+		log.Println("only open. Waiting for 10s")
+		count = int64(db.GetFilesCount())
+		start := time.Now()
+		n, err := db.GetOldFilesCount(time.Now().Add(time.Second * -10))
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("got", n)
+		end := time.Now()
+		duration := end.Sub(start)
+		rate := float64(count) / duration.Seconds()
+		log.Printf("Scanned %d for %v at rate %f per second\n", count, duration, rate)
+		time.Sleep(10 * time.Second)
+	}
 	if generate {
 		log.Println("generating", count, "files")
 

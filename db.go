@@ -1,7 +1,11 @@
 package hath
 
 import (
+	"errors"
 	"log"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -141,6 +145,75 @@ func (d BoltDB) Collect(deadline time.Time) (int, error) {
 	}
 
 	return len(markedFiles), tx.Commit()
+}
+
+// GetOldFiles returns maxCount or less expired files
+func (d BoltDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err error) {
+	stop := errors.New("stop")
+	err = d.db.View(func(tx *bolt.Tx) error {
+		return tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
+			var f File
+			f, err = UnmarshalFile(v)
+			if err != nil {
+				return err
+			}
+			if f.LastUsageBefore(deadline) {
+				files = append(files, f)
+			}
+			if len(files) >= maxCount {
+				return stop
+			}
+			return nil
+		})
+	})
+	if err == stop {
+		err = nil
+	}
+
+	return files, err
+}
+
+// GetOldFilesCount count of files that LastUsage is older than deadline
+func (d BoltDB) GetOldFilesCount(deadline time.Time) (count int64, err error) {
+	err = d.db.View(func(tx *bolt.Tx) error {
+		wg := new(sync.WaitGroup)
+		work := make(chan []byte)
+		worker := func(w chan []byte) {
+			var f File
+			defer wg.Done()
+			for v := range w {
+				err = UnmarshalFileTo(v, &f)
+				if err != nil {
+					panic(err)
+				}
+				if f.LastUsageBefore(deadline) {
+					atomic.AddInt64(&count, 1)
+				}
+			}
+		}
+		workers := runtime.GOMAXPROCS(0)
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go worker(work)
+		}
+		err = tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
+			work <- v
+			return nil
+		})
+		close(work)
+		wg.Wait()
+		return err
+	})
+	return count, err
+}
+
+// GetFilesCount is count of files in database
+func (d BoltDB) GetFilesCount() (count int) {
+	d.db.View(func(tx *bolt.Tx) error {
+		count = tx.Bucket(dbFileBucket).Stats().KeyN
+		return nil
+	})
+	return
 }
 
 func (d BoltDB) get(id []byte) (f File, err error) {

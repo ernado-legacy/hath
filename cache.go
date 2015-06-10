@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"time"
 )
 
 const (
@@ -186,6 +187,7 @@ type FileGenerator struct {
 	ResolutionMax int
 	ResolutionMin int
 	Dir           string
+	TimeDelta     int64
 }
 
 // SumHasher is hasher that can sum
@@ -205,6 +207,11 @@ func (g FileGenerator) NewFake() (f File) {
 	f.Type = FileType(mrand.Intn(int(UnknownImage)))
 	f.Width = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
 	f.Height = mrand.Intn(g.ResolutionMax-g.ResolutionMin) + g.ResolutionMin
+	if g.TimeDelta > 0 {
+		f.LastUsage = time.Now().Unix() + mrand.Int63n(g.TimeDelta*2) - g.TimeDelta
+	} else {
+		f.LastUsage = time.Now().Unix()
+	}
 	b := make([]byte, 20)
 	_, err := rand.Read(b)
 	if err != nil {
