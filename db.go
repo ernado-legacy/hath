@@ -1,7 +1,6 @@
 package hath
 
 import (
-	"encoding/json"
 	"log"
 	"time"
 
@@ -19,10 +18,11 @@ var (
 	dbOptions    = bolt.Options{Timeout: 1 * time.Second}
 )
 
+// DataBase is interface for storing info about files in some DB
 type DataBase interface {
 }
 
-// DB stores info about files in cache
+// BoltDB stores info about files in cache
 type BoltDB struct {
 	db *bolt.DB
 }
@@ -54,7 +54,7 @@ func NewDB(dbPath string) (d *BoltDB, err error) {
 }
 
 func (d BoltDB) add(f File) error {
-	data, err := json.Marshal(f)
+	data, err := f.Marshal()
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (d BoltDB) AddBatch(files []File) error {
 	defer tx.Rollback()
 	bucket := tx.Bucket(dbFileBucket)
 	for _, f := range files {
-		data, err := json.Marshal(f)
+		data, err := f.Marshal()
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ func (d BoltDB) Collect(deadline time.Time) (int, error) {
 	var markedFiles [][]byte
 	var f File
 	err = tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
-		if err := json.Unmarshal(v, &f); err != nil {
+		if err := UnmarshalFileTo(v, &f); err != nil {
 			return err
 		}
 		if f.LastUsageBefore(deadline) {
@@ -152,5 +152,5 @@ func (d BoltDB) get(id []byte) (f File, err error) {
 	if len(data) == 0 {
 		return f, ErrFileNotFound
 	}
-	return f, json.Unmarshal(data, &f)
+	return UnmarshalFile(data)
 }

@@ -37,19 +37,23 @@ func init() {
 
 func main() {
 	flag.Parse()
+	g := hath.FileGenerator{
+		SizeMax:       sizeMax,
+		SizeMin:       sizeMin,
+		ResolutionMax: resMax,
+		ResolutionMin: resMin,
+	}
 	db, err := hath.NewDB(dbpath)
 	defer db.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
+	d, err := g.NewFake().Marshal()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("average file info is", len(d), "bytes")
 	if generate {
-		g := hath.FileGenerator{
-			SizeMax:       sizeMax,
-			SizeMin:       sizeMin,
-			ResolutionMax: resMax,
-			ResolutionMin: resMin,
-		}
-
 		log.Println("generating", count, "files")
 
 		fmt.Printf("%+v\n", g)

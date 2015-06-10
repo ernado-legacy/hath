@@ -31,6 +31,9 @@ func TestDBInit(t *testing.T) {
 				f, err := db.get(rec.ByteID())
 				So(err, ShouldBeNil)
 				So(f.LastUsage, ShouldEqual, rec.LastUsage)
+				So(f.Type, ShouldEqual, rec.Type)
+				So(f.HexID(), ShouldEqual, rec.HexID())
+				So(f.String(), ShouldEqual, rec.String())
 			})
 			Convey("Get 404", func() {
 				rec := g.NewFake()

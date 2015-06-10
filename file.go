@@ -1,6 +1,7 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -12,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/vmihailenco/msgpack.v2"
 
 	"github.com/dineshappavoo/basex"
 )
@@ -74,12 +77,15 @@ func ParseFileType(filetype string) FileType {
 
 // File is hath file representation
 type File struct {
-	Hash      [HashSize]byte `json:"hash"`
-	Size      int64          `json:"size"`
-	Width     int            `json:"width"`
-	Height    int            `json:"height"`
-	Type      FileType       `json:"type"`
-	LastUsage int64          `json:"last_usage"`
+	Hash   [HashSize]byte `json:"hash"`
+	Size   int64          `json:"size"`
+	Width  int            `json:"width"`
+	Height int            `json:"height"`
+	Type   FileType       `json:"type"`
+	// LastUsage is Unix timestamp
+	LastUsage int64 `json:"last_usage"`
+	// Static files should never be removed
+	Static bool `json:"static"`
 }
 
 // LastUsageBefore returns true, if last usage occured before deadline t
@@ -175,6 +181,31 @@ func (f File) Basex() string {
 	n := big.NewInt(0)
 	n.SetBytes(d)
 	return basex.Encode(n.String())
+}
+
+// Marshal serializes file info
+func (f File) Marshal() ([]byte, error) {
+	var buff bytes.Buffer
+	encoder := msgpack.NewEncoder(&buff)
+	err := encoder.Encode(f)
+	if err != nil {
+		return nil, err
+	}
+	return buff.Bytes(), err
+}
+
+// UnmarshalFile deserializes file info fron byte array
+func UnmarshalFile(data []byte) (f File, err error) {
+	buff := bytes.NewBuffer(data)
+	decoder := msgpack.NewDecoder(buff)
+	return f, decoder.Decode(&f)
+}
+
+// UnmarshalFileTo deserializes file info fron byte array by pointer
+func UnmarshalFileTo(data []byte, f *File) error {
+	buff := bytes.NewBuffer(data)
+	decoder := msgpack.NewDecoder(buff)
+	return decoder.Decode(f)
 }
 
 // ByteID returns []byte for file hash
