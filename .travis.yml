@@ -1,17 +1,20 @@
 language: go
 go:
- - release
+ - auto
  - tip
 
 before_install:
  - export PATH=/home/travis/gopath/bin:$PATH
+ - mkdir -p $HOME/gopath/src/cydev.ru/
+ - mv $HOME/gopath/src/github.com/cydev/hath $HOME/gopath/src/cydev.ru/hath
+ - cd $HOME/gopath/src/cydev.ru/hath
 
 install:
+ - go get -t .
  - go get github.com/axw/gocov/gocov
- - go get github.com/smartystreets/goconvey/convey
  - go get golang.org/x/tools/cmd/cover
  - go get github.com/mattn/goveralls
- - if ! go get code.google.com/p/go.tools/cmd/cover; then go get golang.org/x/tools/cmd/cover; fi
+ - go get golang.org/x/tools/cmd/cover
 
 script:
  - $HOME/gopath/bin/goveralls -service=travis-ci
