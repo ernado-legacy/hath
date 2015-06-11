@@ -76,16 +76,17 @@ func ParseFileType(filetype string) FileType {
 }
 
 // File is hath file representation
+// total 20 + 3 + 2 + 2 + 1 + 8 + 1 = 37 bytes
 type File struct {
-	Hash   [HashSize]byte `json:"hash"`
-	Size   int64          `json:"size"`
-	Width  int            `json:"width"`
-	Height int            `json:"height"`
-	Type   FileType       `json:"type"`
+	Hash   [HashSize]byte `json:"hash"`   // 20 byte
+	Size   int64          `json:"size"`   // 4 byte (maximum size 4095mb)
+	Width  int            `json:"width"`  // 2 byte
+	Height int            `json:"height"` // 2 byte
+	Type   FileType       `json:"type"`   // 1 byte
 	// LastUsage is Unix timestamp
-	LastUsage int64 `json:"last_usage"`
+	LastUsage int64 `json:"last_usage"` // 8 byte (can be optimized)
 	// Static files should never be removed
-	Static bool `json:"static"`
+	Static bool `json:"static"` // 1 byte
 }
 
 func (f File) indexKey() []byte {
