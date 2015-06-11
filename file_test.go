@@ -1,6 +1,8 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"bytes"
+	"log"
 	"testing"
 	"time"
 
@@ -29,6 +31,40 @@ func TestFile(t *testing.T) {
 			f := new(File)
 			f.Use()
 			So(f.LastUsage, ShouldEqual, time.Now().Unix())
+		})
+	})
+}
+
+func TestFileIndex(t *testing.T) {
+	Convey("Indexes", t, func() {
+		Convey("Newer", func() {
+			f := new(File)
+			t := time.Now()
+			f.LastUsage = time.Now().Unix()
+			keyOlder := f.indexKey()
+			f.LastUsage = time.Now().Unix() + 50
+			keyNewer := f.indexKey()
+			// keyOlder should be less than keyNewer
+			So(bytes.Compare(keyOlder[:], keyNewer[:]), ShouldEqual, -1)
+			Convey("Extract ID", func() {
+				hash := getIDFromIndexKey(f.indexKey())
+				So(bytes.Compare(hash, f.ByteID()), ShouldEqual, 0)
+			})
+			Convey("Start/end", func() {
+				f.LastUsage = t.Unix()
+				start := getIndexStart(t)
+				end := getIndexEnd(t)
+				log.Println(start, end)
+				So(bytes.Compare(start, f.indexKey()), ShouldEqual, -1)
+				So(bytes.Compare(f.indexKey(), end), ShouldEqual, -1)
+			})
+		})
+		Convey("Start/end", func() {
+			t := time.Now()
+			start := getIndexStart(t)
+			end := getIndexEnd(t)
+			log.Println(start, end)
+			So(bytes.Compare(start, end), ShouldEqual, -1)
 		})
 	})
 }

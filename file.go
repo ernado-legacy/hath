@@ -3,6 +3,7 @@ package hath // import "cydev.ru/hath"
 import (
 	"bytes"
 	"crypto/sha1"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,9 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/vmihailenco/msgpack.v2"
-
 	"github.com/dineshappavoo/basex"
+	"gopkg.in/vmihailenco/msgpack.v2"
 )
 
 const (
@@ -86,6 +86,16 @@ type File struct {
 	LastUsage int64 `json:"last_usage"`
 	// Static files should never be removed
 	Static bool `json:"static"`
+}
+
+func (f File) indexKey() []byte {
+	timeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timeBytes, uint64(f.LastUsage))
+	elems := [][]byte{
+		timeBytes,
+		f.Hash[:],
+	}
+	return bytes.Join(elems, nil)
 }
 
 // LastUsageBefore returns true, if last usage occured before deadline t
@@ -196,6 +206,7 @@ func (f File) Marshal() ([]byte, error) {
 
 // UnmarshalFile deserializes file info fron byte array
 func UnmarshalFile(data []byte) (f File, err error) {
+
 	buff := bytes.NewBuffer(data)
 	decoder := msgpack.NewDecoder(buff)
 	return f, decoder.Decode(&f)

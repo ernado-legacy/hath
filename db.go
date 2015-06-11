@@ -1,11 +1,10 @@
 package hath
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"log"
-	"runtime"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -15,11 +14,13 @@ const (
 	dbDir      = "db"
 	dbFileMode = 0600
 	dbBulkSize = 10000
+	timeBytes  = 8
 )
 
 var (
-	dbFileBucket = []byte("files")
-	dbOptions    = bolt.Options{Timeout: 1 * time.Second}
+	dbFileBucket      = []byte("files")
+	dbTimeIndexBucket = []byte("last_usage")
+	dbOptions         = bolt.Options{Timeout: 1 * time.Second}
 )
 
 // DataBase is interface for storing info about files in some DB
@@ -49,6 +50,10 @@ func NewDB(dbPath string) (d *BoltDB, err error) {
 	if err != nil {
 		return
 	}
+	_, err = tx.CreateBucketIfNotExists(dbTimeIndexBucket)
+	if err != nil {
+		return
+	}
 	if err = tx.Commit(); err != nil {
 		return
 	}
@@ -68,6 +73,9 @@ func (d BoltDB) add(f File) error {
 		return err
 	}
 	if err := tx.Bucket(dbFileBucket).Put(f.ByteID(), data); err != nil {
+		return err
+	}
+	if err := tx.Bucket(dbTimeIndexBucket).Put(f.indexKey(), f.ByteID()); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -104,12 +112,17 @@ func (d BoltDB) AddBatch(files []File) error {
 	}
 	defer tx.Rollback()
 	bucket := tx.Bucket(dbFileBucket)
+	index := tx.Bucket(dbTimeIndexBucket)
 	for _, f := range files {
 		data, err := f.Marshal()
 		if err != nil {
 			return err
 		}
 		if err := bucket.Put(f.ByteID(), data); err != nil {
+			return err
+		}
+		log.Printf("%x => %x", f.indexKey(), f.ByteID())
+		if err := index.Put(f.indexKey(), f.ByteID()); err != nil {
 			return err
 		}
 	}
@@ -147,6 +160,37 @@ func (d BoltDB) Collect(deadline time.Time) (int, error) {
 	return len(markedFiles), tx.Commit()
 }
 
+func getIndexStart(deadline time.Time) []byte {
+	timeBytes := make([]byte, timeBytes)
+	binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
+	hashBytes := make([]byte, HashSize)
+	elems := [][]byte{
+		timeBytes,
+		hashBytes,
+	}
+	return bytes.Join(elems, nil)
+}
+
+func getIndexEnd(deadline time.Time) []byte {
+	timeBytes := make([]byte, timeBytes)
+	binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
+	hashBytes := make([]byte, HashSize)
+	for i := range hashBytes {
+		hashBytes[i] = 255
+	}
+	elems := [][]byte{
+		timeBytes,
+		hashBytes,
+	}
+	return bytes.Join(elems, nil)
+}
+
+func getIDFromIndexKey(id []byte) []byte {
+	hash := make([]byte, HashSize)
+	copy(id[timeBytes:], hash)
+	return hash
+}
+
 // GetOldFiles returns maxCount or less expired files
 func (d BoltDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err error) {
 	stop := errors.New("stop")
@@ -176,32 +220,13 @@ func (d BoltDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err
 // GetOldFilesCount count of files that LastUsage is older than deadline
 func (d BoltDB) GetOldFilesCount(deadline time.Time) (count int64, err error) {
 	err = d.db.View(func(tx *bolt.Tx) error {
-		wg := new(sync.WaitGroup)
-		work := make(chan []byte)
-		worker := func(w chan []byte) {
-			var f File
-			defer wg.Done()
-			for v := range w {
-				err = UnmarshalFileTo(v, &f)
-				if err != nil {
-					panic(err)
-				}
-				if f.LastUsageBefore(deadline) {
-					atomic.AddInt64(&count, 1)
-				}
-			}
+		min := getIndexStart(deadline)
+		max := getIndexEnd(deadline)
+		log.Printf("from %x to  %x", min, max)
+		c := tx.Bucket(dbTimeIndexBucket).Cursor()
+		for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
+			count++
 		}
-		workers := runtime.GOMAXPROCS(0)
-		for i := 0; i < workers; i++ {
-			wg.Add(1)
-			go worker(work)
-		}
-		err = tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
-			work <- v
-			return nil
-		})
-		close(work)
-		wg.Wait()
 		return err
 	})
 	return count, err
