@@ -110,6 +110,41 @@ func TestFileSerialization(t *testing.T) {
 	})
 }
 
+func TestFileMarshalling(t *testing.T) {
+	g := defaultGenerator
+	Convey("Marshalling", t, func() {
+		Convey("Serialize", func() {
+			f := g.NewFake()
+			b, err := f.Marshal()
+			So(err, ShouldBeNil)
+			So(len(b), ShouldEqual, fileBytes)
+			Convey("Deserialize", func() {
+				resultFile, err := FileFromBytes(b)
+				So(err, ShouldBeNil)
+				So(f.Static, ShouldEqual, resultFile.Static)
+				So(f.HexID(), ShouldEqual, resultFile.HexID())
+				So(f.String(), ShouldEqual, resultFile.String())
+			})
+		})
+		Convey("Random data", func() {
+			count := 10000
+			failures := 0
+			for i := 0; i < count; i++ {
+				f := g.NewFake()
+				b := f.Bytes()
+				nf, err := FileFromBytes(b)
+				if err != nil {
+					failures++
+				}
+				if nf != f {
+					failures++
+				}
+			}
+			So(failures, ShouldEqual, 0)
+		})
+	})
+}
+
 func TestFileID(t *testing.T) {
 	f := File{}
 

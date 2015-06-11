@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/dineshappavoo/basex"
-	"gopkg.in/vmihailenco/msgpack.v2"
 )
 
 const (
@@ -292,13 +291,7 @@ func (f File) Basex() string {
 
 // Marshal serializes file info
 func (f File) Marshal() ([]byte, error) {
-	var buff bytes.Buffer
-	encoder := msgpack.NewEncoder(&buff)
-	err := encoder.Encode(f)
-	if err != nil {
-		return nil, err
-	}
-	return buff.Bytes(), err
+	return f.Bytes(), nil
 }
 
 // UnmarshalFile deserializes file info fron byte array

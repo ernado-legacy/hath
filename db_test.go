@@ -41,11 +41,11 @@ func TestDBCollect(t *testing.T) {
 		}
 		Convey("Insert", func() {
 			So(db.AddBatch(files), ShouldBeNil)
-			// Convey("Count", func() {
-			// 	n, err := db.GetOldFilesCount(deadline)
-			// 	So(err, ShouldBeNil)
-			// 	So(n, ShouldEqual, count)
-			// })
+			Convey("Count", func() {
+				n, err := db.GetOldFilesCount(deadline)
+				So(err, ShouldBeNil)
+				So(n, ShouldEqual, count)
+			})
 			files, err := db.GetOldFiles(count*2, deadline)
 			So(err, ShouldBeNil)
 			So(len(files), ShouldEqual, count)

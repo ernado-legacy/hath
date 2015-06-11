@@ -3,7 +3,6 @@ package hath
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"log"
 	"time"
 
@@ -121,7 +120,7 @@ func (d BoltDB) AddBatch(files []File) error {
 		if err := bucket.Put(f.ByteID(), data); err != nil {
 			return err
 		}
-		log.Printf("%x => %x", f.indexKey(), f.ByteID())
+		log.Printf("index: %x => %x", f.indexKey()[:8], f.ByteID())
 		if err := index.Put(f.indexKey(), f.ByteID()); err != nil {
 			return err
 		}
@@ -162,7 +161,7 @@ func (d BoltDB) Collect(deadline time.Time) (int, error) {
 
 func getIndexStart(deadline time.Time) []byte {
 	timeBytes := make([]byte, timeBytes)
-	binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
+	// binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
 	hashBytes := make([]byte, HashSize)
 	elems := [][]byte{
 		timeBytes,
@@ -193,27 +192,31 @@ func getIDFromIndexKey(id []byte) []byte {
 
 // GetOldFiles returns maxCount or less expired files
 func (d BoltDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err error) {
-	stop := errors.New("stop")
 	err = d.db.View(func(tx *bolt.Tx) error {
-		return tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
-			var f File
-			f, err = UnmarshalFile(v)
-			if err != nil {
+		var hashes [][]byte
+		min := getIndexStart(deadline)
+		max := getIndexEnd(deadline)
+		c := tx.Bucket(dbTimeIndexBucket).Cursor()
+		for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
+			hashes = append(hashes, getIDFromIndexKey(k))
+			if len(hashes) > maxCount {
+				break
+			}
+		}
+		bucket := tx.Bucket(dbFileBucket)
+		var f File
+		for _, k := range hashes {
+			data := bucket.Get(k)
+			if data == nil {
+				return ErrFileNotFound
+			}
+			if err = UnmarshalFileTo(data, &f); err != nil {
 				return err
 			}
-			if f.LastUsageBefore(deadline) {
-				files = append(files, f)
-			}
-			if len(files) >= maxCount {
-				return stop
-			}
-			return nil
-		})
+			files = append(files, f)
+		}
+		return nil
 	})
-	if err == stop {
-		err = nil
-	}
-
 	return files, err
 }
 
@@ -222,7 +225,6 @@ func (d BoltDB) GetOldFilesCount(deadline time.Time) (count int64, err error) {
 	err = d.db.View(func(tx *bolt.Tx) error {
 		min := getIndexStart(deadline)
 		max := getIndexEnd(deadline)
-		log.Printf("from %x to  %x", min, max)
 		c := tx.Bucket(dbTimeIndexBucket).Cursor()
 		for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
 			count++
