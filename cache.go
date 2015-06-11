@@ -218,6 +218,10 @@ func (g FileGenerator) NewFake() (f File) {
 		panic(err)
 	}
 	copy(f.Hash[:], b)
+	t := mrand.Intn(10)
+	if t > 5 {
+		f.Static = true
+	}
 
 	return f
 }

@@ -23,7 +23,10 @@ const (
 	keyStampEnd  = "hotlinkthis"
 	prefixLenght = 2
 	// HashSize is length of sha1 hash in bytes
-	HashSize = 20
+	HashSize        = 20
+	sizeBytes       = 4
+	resolutionBytes = 2
+	fileBytes       = 38
 )
 
 // FileType represents file format of image
@@ -76,7 +79,8 @@ func ParseFileType(filetype string) FileType {
 }
 
 // File is hath file representation
-// total 20 + 3 + 2 + 2 + 1 + 8 + 1 = 37 bytes
+// total 20 + 4 + 2 + 2 + 1 + 8 + 1 = 38 bytes
+// in memory = 56 bytes
 type File struct {
 	Hash [HashSize]byte `json:"hash"` // 20 byte
 	Type FileType       `json:"type"` // 1 byte
@@ -87,6 +91,98 @@ type File struct {
 	Height int   `json:"height"` // 2 byte
 	// LastUsage is Unix timestamp
 	LastUsage int64 `json:"last_usage"` // 8 byte (can be optimized)
+}
+
+func (f File) Bytes() []byte {
+	var result [fileBytes]byte
+	var buff [8]byte
+	cursor := 0
+
+	// writing hash
+	copy(result[cursor:HashSize], f.Hash[:])
+	cursor += HashSize
+
+	// writing type
+	result[cursor] = byte(f.Type)
+	cursor++
+
+	// writing static
+	if f.Static {
+		result[cursor] = 255
+	}
+	cursor++
+
+	// Size is 64bit, or 8 byte
+	// little endian is 1111111111000000000
+	// we want only first right 4 byte
+	binary.LittleEndian.PutUint64(buff[:], uint64(f.Size))
+	copy(result[cursor:cursor+sizeBytes], buff[:sizeBytes])
+	cursor += sizeBytes
+
+	// writing height
+	binary.LittleEndian.PutUint64(buff[:], uint64(f.Height))
+	copy(result[cursor:cursor+resolutionBytes], buff[:resolutionBytes])
+	cursor += resolutionBytes
+
+	// writing width
+	binary.LittleEndian.PutUint64(buff[:], uint64(f.Width))
+	copy(result[cursor:cursor+resolutionBytes], buff[:resolutionBytes])
+	cursor += resolutionBytes
+
+	// writing time
+	binary.LittleEndian.PutUint64(buff[:], uint64(f.LastUsage))
+	copy(result[cursor:cursor+8], buff[:])
+	cursor += 8
+	return result[:]
+}
+
+func FileFromBytes(result []byte) (f File, err error) {
+	return f, FileFromBytesTo(result, &f)
+}
+
+func FileFromBytesTo(result []byte, f *File) error {
+	if len(result) != fileBytes {
+		return ErrFileInconsistent
+	}
+	var buff [8]byte
+	cursor := 0
+	// reading hash
+	copy(f.Hash[:], result[cursor:HashSize])
+	cursor += HashSize
+
+	// reading type
+	f.Type = FileType(result[cursor])
+	cursor++
+
+	// reading static
+	f.Static = result[cursor] == 255
+	cursor++
+
+	// Size is 64bit, or 8 byte
+	// little endian is 1111111111000000000
+	// we want only first right 4 byte
+	copy(buff[:sizeBytes], result[cursor:cursor+sizeBytes])
+	f.Size = int64(binary.LittleEndian.Uint64(buff[:]))
+	cursor += sizeBytes
+
+	// reading height
+	buff = [8]byte{} // buffer reset
+	copy(buff[:resolutionBytes], result[cursor:cursor+resolutionBytes])
+	f.Height = int(binary.LittleEndian.Uint64(buff[:]))
+	cursor += resolutionBytes
+
+	// reading width
+	buff = [8]byte{} // buffer reset
+	copy(buff[:resolutionBytes], result[cursor:cursor+resolutionBytes])
+	f.Width = int(binary.LittleEndian.Uint64(buff[:]))
+	cursor += resolutionBytes
+
+	// reading time
+	buff = [8]byte{} // buffer reset
+	copy(buff[:], result[cursor:cursor+8])
+	f.LastUsage = int64(binary.LittleEndian.Uint64(buff[:]))
+
+	return nil
 }
 
 func (f File) indexKey() []byte {
@@ -207,17 +303,12 @@ func (f File) Marshal() ([]byte, error) {
 
 // UnmarshalFile deserializes file info fron byte array
 func UnmarshalFile(data []byte) (f File, err error) {
-
-	buff := bytes.NewBuffer(data)
-	decoder := msgpack.NewDecoder(buff)
-	return f, decoder.Decode(&f)
+	return f, FileFromBytesTo(data, &f)
 }
 
 // UnmarshalFileTo deserializes file info fron byte array by pointer
 func UnmarshalFileTo(data []byte, f *File) error {
-	buff := bytes.NewBuffer(data)
-	decoder := msgpack.NewDecoder(buff)
-	return decoder.Decode(f)
+	return FileFromBytesTo(data, f)
 }
 
 // ByteID returns []byte for file hash

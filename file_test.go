@@ -38,7 +38,7 @@ func TestFile(t *testing.T) {
 func TestFileIndex(t *testing.T) {
 	Convey("Indexes", t, func() {
 		Convey("Newer", func() {
-			f := new(File)
+			f := defaultGenerator.NewFake()
 			t := time.Now()
 			f.LastUsage = time.Now().Unix()
 			keyOlder := f.indexKey()
@@ -54,7 +54,6 @@ func TestFileIndex(t *testing.T) {
 				f.LastUsage = t.Unix()
 				start := getIndexStart(t)
 				end := getIndexEnd(t)
-				log.Println(start, end)
 				So(bytes.Compare(start, f.indexKey()), ShouldEqual, -1)
 				So(bytes.Compare(f.indexKey(), end), ShouldEqual, -1)
 			})
@@ -65,6 +64,48 @@ func TestFileIndex(t *testing.T) {
 			end := getIndexEnd(t)
 			log.Println(start, end)
 			So(bytes.Compare(start, end), ShouldEqual, -1)
+		})
+	})
+}
+
+var defaultGenerator = FileGenerator{
+	SizeMax:       10 * 1024 * 1024,
+	SizeMin:       200 * 1024,
+	ResolutionMax: 2500,
+	ResolutionMin: 300,
+	TimeDelta:     20,
+}
+
+func TestFileSerialization(t *testing.T) {
+	g := defaultGenerator
+	Convey("Serialization", t, func() {
+		Convey("Serialize", func() {
+			f := g.NewFake()
+			b := f.Bytes()
+			So(len(b), ShouldEqual, fileBytes)
+			Convey("Deserialize", func() {
+				resultFile, err := FileFromBytes(b)
+				So(err, ShouldBeNil)
+				So(f.Static, ShouldEqual, resultFile.Static)
+				So(f.HexID(), ShouldEqual, resultFile.HexID())
+				So(f.String(), ShouldEqual, resultFile.String())
+			})
+		})
+		Convey("Random data", func() {
+			count := 10000
+			failures := 0
+			for i := 0; i < count; i++ {
+				f := g.NewFake()
+				b := f.Bytes()
+				nf, err := FileFromBytes(b)
+				if err != nil {
+					failures++
+				}
+				if nf != f {
+					failures++
+				}
+			}
+			So(failures, ShouldEqual, 0)
 		})
 	})
 }

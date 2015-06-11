@@ -187,7 +187,7 @@ func getIndexEnd(deadline time.Time) []byte {
 
 func getIDFromIndexKey(id []byte) []byte {
 	hash := make([]byte, HashSize)
-	copy(id[timeBytes:], hash)
+	copy(hash, id[timeBytes:])
 	return hash
 }
 
