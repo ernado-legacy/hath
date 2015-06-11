@@ -120,7 +120,6 @@ func (d BoltDB) AddBatch(files []File) error {
 		if err := bucket.Put(f.ByteID(), data); err != nil {
 			return err
 		}
-		log.Printf("index: %x => %x", f.indexKey()[:8], f.ByteID())
 		if err := index.Put(f.indexKey(), f.ByteID()); err != nil {
 			return err
 		}
@@ -137,18 +136,11 @@ func (d BoltDB) Collect(deadline time.Time) (int, error) {
 	defer tx.Rollback()
 
 	var markedFiles [][]byte
-	var f File
-	err = tx.Bucket(dbFileBucket).ForEach(func(k []byte, v []byte) error {
-		if err := UnmarshalFileTo(v, &f); err != nil {
-			return err
-		}
-		if f.LastUsageBefore(deadline) {
-			markedFiles = append(markedFiles, k)
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
+	min := getIndexStart(deadline)
+	max := getIndexEnd(deadline)
+	c := tx.Bucket(dbTimeIndexBucket).Cursor()
+	for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
+		markedFiles = append(markedFiles, getIDFromIndexKey(k))
 	}
 	for _, k := range markedFiles {
 		if err := tx.Bucket(dbFileBucket).Delete(k); err != nil {

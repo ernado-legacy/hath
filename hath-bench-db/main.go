@@ -76,6 +76,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("average file info is", len(d), "bytes")
+	log.Printf("%x", d)
 	if onlyOpen {
 		log.Println("only open. Waiting for 10s")
 		count = int64(db.GetFilesCount())
