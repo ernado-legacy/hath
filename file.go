@@ -25,6 +25,7 @@ const (
 	sizeBytes       = 4
 	resolutionBytes = 2
 	fileBytes       = 38
+	keyStampLength  = 10
 )
 
 // FileType represents file format of image
@@ -281,7 +282,7 @@ func (f File) KeyStamp(key string, timestamp int64) string {
 	}
 	toHash := strings.Join(elems, keyStampDelimiter)
 	hash := sha1.Sum([]byte(toHash))
-	return fmt.Sprintf("%x", hash)[:10]
+	return fmt.Sprintf("%x", hash)[:keyStampLength]
 }
 
 // Basex returns basex representation of hash
