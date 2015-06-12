@@ -105,7 +105,7 @@ func TestFileCache(t *testing.T) {
 			Convey("Delete", func() {
 				f, err := g.New()
 				So(err, ShouldBeNil)
-				So(c.Delete(f), ShouldBeNil)
+				So(c.Remove(f), ShouldBeNil)
 				_, err = c.Get(f)
 				So(err, ShouldEqual, ErrFileNotFound)
 			})
@@ -164,7 +164,7 @@ func TestFileCache(t *testing.T) {
 					Convey("Delete", func() {
 						f, err := g.New()
 						So(err, ShouldBeNil)
-						So(c.Delete(f), ShouldBeNil)
+						So(c.Remove(f), ShouldBeNil)
 						So(c.Check(f), ShouldEqual, ErrFileNotFound)
 					})
 				})

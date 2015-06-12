@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -33,6 +34,10 @@ func TestServer(t *testing.T) {
 		cfg := ServerConfig{}
 		cfg.Credentials = credentials
 		cfg.Frontend = frontend
+		db, err := NewDB(path.Join(testDir, "bolt.db"))
+		defer db.Close()
+		So(err, ShouldBeNil)
+		cfg.DataBase = db
 
 		defer os.RemoveAll(testDir)
 		g := FileGenerator{
@@ -57,6 +62,8 @@ func TestServer(t *testing.T) {
 			f, err := g.New()
 			So(err, ShouldBeNil)
 			So(frontend.Check(f), ShouldBeNil)
+			// saving to db
+			So(db.Add(f), ShouldBeNil)
 
 			// generating link
 			ts := time.Now().Unix()
@@ -76,6 +83,40 @@ func TestServer(t *testing.T) {
 			_, err = io.CopyN(hash, res.Body, f.Size)
 			So(err, ShouldBeNil)
 			So(bytes.Equal(hash.Sum(nil), f.ByteID()), ShouldBeTrue)
+		})
+		Convey("GET with no db consistency", func() {
+			f, err := g.New()
+			So(err, ShouldBeNil)
+			So(frontend.Check(f), ShouldBeNil)
+
+			Convey("DB must be inconsistent", func() {
+				_, err := db.Get(f.ByteID())
+				So(err, ShouldEqual, ErrFileNotFound)
+			})
+
+			// generating link
+			ts := time.Now().Unix()
+			ks := f.KeyStamp(credentials.Key, ts)
+			args := make(Args)
+			args[argsKeystamp] = fmt.Sprintf("%d-%s", ts, ks)
+			uPath := fmt.Sprintf("/h/%s/%s/test.png", f, args)
+			link := &url.URL{Host: u.Host, Scheme: "http", Path: uPath}
+
+			// making request
+			res, err := http.Get(link.String())
+			So(err, ShouldBeNil)
+			defer res.Body.Close()
+			So(res.StatusCode, ShouldEqual, http.StatusOK)
+
+			hash := sha1.New()
+			_, err = io.CopyN(hash, res.Body, f.Size)
+			So(err, ShouldBeNil)
+			So(bytes.Equal(hash.Sum(nil), f.ByteID()), ShouldBeTrue)
+			Convey("DB must be consistent now", func() {
+				f2, err := db.Get(f.ByteID())
+				So(err, ShouldBeNil)
+				So(f2.String(), ShouldEqual, f.String())
+			})
 		})
 	})
 }

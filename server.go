@@ -2,6 +2,7 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ type Server interface {
 type DefaultServer struct {
 	cfg      ServerConfig
 	frontend Frontend
+	db       DataBase
 	e        *echo.Echo
 }
 
@@ -107,8 +109,13 @@ func (s *DefaultServer) handleImage(c *echo.Context) error {
 	if expectedKeyStamp != keyStamp {
 		return c.HTML(http.StatusForbidden, "403: bad keystamp")
 	}
-	err = s.frontend.Handle(f, c.Response().Writer())
-	return nil
+	if err := s.db.Use(f); err != nil {
+		log.Printf("db miss for %s, writing to database\n", f.HexID())
+		if err := s.db.Add(f); err != nil {
+			return c.HTML(http.StatusInternalServerError, "500: unable to process request")
+		}
+	}
+	return s.frontend.Handle(f, c.Response().Writer())
 }
 
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -119,12 +126,14 @@ func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type ServerConfig struct {
 	Credentials
 	Frontend Frontend
+	DataBase DataBase
 }
 
 // NewServer cleares default server with provided client and frontend
 func NewServer(cfg ServerConfig) *DefaultServer {
 	s := new(DefaultServer)
 	s.cfg = cfg
+	s.db = cfg.DataBase
 	s.frontend = cfg.Frontend
 	e := echo.New()
 	e.Get("/h/:fileid/:kwds/:filename", s.handleImage)

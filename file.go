@@ -256,6 +256,7 @@ func FileFromID(fileid string) (f File, err error) {
 		return
 	}
 	f.Type = ParseFileType(elems[4])
+	f.LastUsage = time.Now().Unix()
 	return f, err
 }
 

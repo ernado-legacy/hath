@@ -24,7 +24,7 @@ var (
 type DataBase interface {
 	Add(f File) error
 	AddBatch(f []File) error
-	Use(f *File) error
+	Use(f File) error
 	Remove(f File) error
 	RemoveBatch(f []File) error
 	Close() error
@@ -177,7 +177,7 @@ func (d BoltDB) Remove(f File) error {
 }
 
 // Use updates LastUsage of provided file
-func (d BoltDB) Use(f *File) error {
+func (d BoltDB) Use(f File) error {
 	lastUsage := time.Now().Unix()
 	tx, err := d.db.Begin(true)
 	if err != nil {
@@ -187,6 +187,13 @@ func (d BoltDB) Use(f *File) error {
 
 	fileBucket := tx.Bucket(dbFileBucket)
 	indexBucket := tx.Bucket(dbTimeIndexBucket)
+
+	// getting file from database
+	// for consistency
+	f, err = d.Get(f.ByteID())
+	if err != nil {
+		return err
+	}
 
 	if err := indexBucket.Delete(f.indexKey()); err != nil {
 		return err
@@ -303,13 +310,20 @@ func (d BoltDB) Count() (count int) {
 
 // Get loads file from database
 func (d BoltDB) Get(id []byte) (f File, err error) {
-	tx, err := d.db.Begin(false)
+	var data []byte
+	err = d.db.View(func(tx *bolt.Tx) error {
+		data = tx.Bucket(dbFileBucket).Get(id)
+
+		if data == nil || len(data) == 0 {
+			return ErrFileNotFound
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return f, err
 	}
-	data := tx.Bucket(dbFileBucket).Get(id)
-	if len(data) == 0 {
-		return f, ErrFileNotFound
-	}
+
 	return UnmarshalFile(data)
 }

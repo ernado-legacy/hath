@@ -78,12 +78,17 @@ func NewDirectFrontend(cache DirectCache) Frontend {
 
 // Add file to frontend
 func (d *DirectFrontend) Add(file File, r io.Reader) error {
-	return d.Add(file, r)
+	return d.cache.Add(file, r)
 }
 
-// Delete file
-func (d *DirectFrontend) Delete(file File) error {
-	return d.Delete(file)
+// Remove file
+func (d *DirectFrontend) Remove(file File) error {
+	return d.cache.Remove(file)
+}
+
+// RemoveBatch removes files
+func (d *DirectFrontend) RemoveBatch(files []File) error {
+	return d.cache.RemoveBatch(files)
 }
 
 // Get returns file from fontend
@@ -100,7 +105,8 @@ func (d *DirectFrontend) Check(file File) error {
 // i.e. not using any redirects
 type DirectCache interface {
 	Get(file File) (io.ReadCloser, error)
-	Delete(file File) error
+	Remove(f File) error
+	RemoveBatch(f []File) error
 	Add(file File, r io.Reader) error
 	Check(file File) error
 }
@@ -122,9 +128,19 @@ func (c *FileCache) Get(file File) (io.ReadCloser, error) {
 	return f, err
 }
 
-// Delete removes file from storage
-func (c *FileCache) Delete(file File) error {
+// Remove removes file from storage
+func (c *FileCache) Remove(file File) error {
 	return os.Remove(c.path(file))
+}
+
+// RemoveBatch removes files from storage
+func (c *FileCache) RemoveBatch(files []File) error {
+	for _, f := range files {
+		if err := c.Remove(f); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 // path returns absolute(or relative) path
