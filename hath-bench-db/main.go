@@ -28,11 +28,12 @@ var (
 	collect    bool
 	bulkSize   int64
 	onlyOpen   bool
+	onlyMemory bool
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
 func init() {
-	flag.Int64Var(&count, "count", 100, "files to generate")
+	flag.Int64Var(&count, "count", 10000, "files to generate")
 	flag.Int64Var(&bulkSize, "bulk", 10000, "bulk size")
 	flag.Int64Var(&sizeMax, "size-max", 1024*100, "maximum file size in bytes")
 	flag.Int64Var(&sizeMin, "size-min", 1024*5, "minimum file size in bytes")
@@ -41,6 +42,7 @@ func init() {
 	flag.BoolVar(&generate, "generate", false, "generate data")
 	flag.BoolVar(&collect, "collect", true, "collect old files")
 	flag.BoolVar(&onlyOpen, "only-open", false, "only open db")
+	flag.BoolVar(&onlyMemory, "only-memory", false, "only load to memory")
 	flag.StringVar(&dbpath, "dbfile", "db.bolt", "working directory")
 	flag.IntVar(&cpus, "cpus", runtime.GOMAXPROCS(0), "cpu to use")
 }
@@ -66,6 +68,31 @@ func main() {
 		ResolutionMin: resMin,
 		TimeDelta:     20,
 	}
+	if onlyMemory {
+		log.Println("allocating")
+		var files = make([]hath.File, count)
+		log.Println("generating")
+		for i := range files {
+			files[i] = g.NewFake()
+		}
+		log.Println("generated", len(files))
+		fmt.Scanln()
+		start := time.Now()
+		log.Println("iterating...")
+		var count int
+		for _, f := range files {
+			if f.Static {
+				count++
+			}
+		}
+		end := time.Now()
+		duration := end.Sub(start)
+		rate := float64(len(files)) / duration.Seconds()
+		fmt.Println("static", count)
+		fmt.Printf("OK for %v at rate %f per second\n", duration, rate)
+		log.Println("iterated")
+		os.Exit(0)
+	}
 	db, err := hath.NewDB(dbpath)
 	defer db.Close()
 	if err != nil {
@@ -79,7 +106,7 @@ func main() {
 	log.Printf("%x", d)
 	if onlyOpen {
 		log.Println("only open. Waiting for 10s")
-		count = int64(db.GetFilesCount())
+		count = int64(db.Count())
 		start := time.Now()
 		n, err := db.GetOldFilesCount(time.Now().Add(time.Second * -10))
 		if err != nil {
@@ -128,19 +155,19 @@ func main() {
 		rate := float64(count) / duration.Seconds()
 		fmt.Printf("OK for %v at rate %f per second\n", duration, rate)
 	}
-	if collect {
-		log.Println("collecting")
-		start := time.Now()
-		n, err := db.Collect(time.Now().Add(-time.Second))
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		end := time.Now()
-		duration := end.Sub(start)
-		rate := float64(n) / duration.Seconds()
-		fmt.Printf("Removed %d for %v at rate %f per second\n", n, duration, rate)
-	}
+	// if collect {
+	// 	log.Println("collecting")
+	// 	start := time.Now()
+	// 	n, err := db.Collect(time.Now().Add(-time.Second))
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	//
+	// 	end := time.Now()
+	// 	duration := end.Sub(start)
+	// 	rate := float64(n) / duration.Seconds()
+	// 	fmt.Printf("Removed %d for %v at rate %f per second\n", n, duration, rate)
+	// }
 	log.Println(count, "is rought", bytefmt.ByteSize(hath.GetRoughCacheSize(count)))
 	log.Println("OK")
 }
