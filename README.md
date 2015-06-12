@@ -5,3 +5,4 @@ Hath client in golang
 [![Build Status](https://travis-ci.org/cydev/hath.svg?branch=master)](https://travis-ci.org/cydev/hath)
 [![Coverage Status](https://coveralls.io/repos/cydev/hath/badge.svg)](https://coveralls.io/r/cydev/hath)
 [![GoDoc](https://godoc.org/cydev.ru/hath?status.svg)](https://godoc.org/cydev.ru/hath)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cydev/hath/blob/master/LICENSE)
