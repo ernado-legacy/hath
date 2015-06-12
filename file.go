@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -92,6 +91,7 @@ type File struct {
 	LastUsage int64 `json:"last_usage"` // 8 byte (can be optimized)
 }
 
+// Bytes serializes file info into byte array
 func (f File) Bytes() []byte {
 	var result [fileBytes]byte
 	var buff [8]byte
@@ -135,10 +135,12 @@ func (f File) Bytes() []byte {
 	return result[:]
 }
 
+// FileFromBytes deserializes byte slice into file
 func FileFromBytes(result []byte) (f File, err error) {
 	return f, FileFromBytesTo(result, &f)
 }
 
+// FileFromBytesTo deserializes byte slice into file by pointer
 func FileFromBytesTo(result []byte, f *File) error {
 	if len(result) != fileBytes {
 		return ErrFileInconsistent
@@ -307,16 +309,4 @@ func UnmarshalFileTo(data []byte, f *File) error {
 // ByteID returns []byte for file hash
 func (f File) ByteID() []byte {
 	return f.Hash[:]
-}
-
-func getFileSHA1(name string) (hash string, err error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return
-	}
-	hasher := sha1.New()
-	if _, err = io.Copy(hasher, f); err != nil {
-		return
-	}
-	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }

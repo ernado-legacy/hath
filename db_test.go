@@ -3,6 +3,7 @@ package hath // import "cydev.ru/hath"
 import (
 	"io/ioutil"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -68,12 +69,16 @@ func TestDBInit(t *testing.T) {
 		db, err := NewDB(tmpDB.Name())
 		So(err, ShouldBeNil)
 		So(db, ShouldNotBeNil)
+		Convey("Implements DataBase", func() {
+			dbInterface := reflect.TypeOf((*DataBase)(nil)).Elem()
+			So(reflect.TypeOf(db).Implements(dbInterface), ShouldBeTrue)
+		})
 		Convey("Insert", func() {
 			rec := g.NewFake()
 			err := db.Add(rec)
 			So(err, ShouldBeNil)
 			Convey("Get", func() {
-				f, err := db.get(rec.ByteID())
+				f, err := db.Get(rec.ByteID())
 				So(err, ShouldBeNil)
 				So(f.LastUsage, ShouldEqual, rec.LastUsage)
 				So(f.Type, ShouldEqual, rec.Type)
@@ -82,7 +87,7 @@ func TestDBInit(t *testing.T) {
 			})
 			Convey("Get 404", func() {
 				rec := g.NewFake()
-				_, err := db.get(rec.ByteID())
+				_, err := db.Get(rec.ByteID())
 				So(err, ShouldEqual, ErrFileNotFound)
 			})
 		})

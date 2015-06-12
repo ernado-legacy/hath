@@ -10,8 +10,6 @@ import (
 )
 
 const (
-	dbDir      = "db"
-	dbFileMode = 0600
 	dbBulkSize = 10000
 	timeBytes  = 8
 )
@@ -26,10 +24,11 @@ var (
 type DataBase interface {
 	Add(f File) error
 	AddBatch(f []File) error
-	Use(f File) error
+	Use(f *File) error
 	Remove(f File) error
 	RemoveBatch(f []File) error
 	Close() error
+	Count() int
 }
 
 // BoltDB stores info about files in cache
@@ -125,7 +124,7 @@ func (d BoltDB) AddBatch(files []File) error {
 		if err := bucket.Put(f.ByteID(), data); err != nil {
 			return err
 		}
-		if err := index.Put(f.indexKey(), f.ByteID()); err != nil {
+		if err := index.Put(f.indexKey(), nil); err != nil {
 			return err
 		}
 	}
@@ -154,6 +153,52 @@ func (d BoltDB) RemoveBatch(files []File) error {
 			return err
 		}
 	}
+	return tx.Commit()
+}
+
+// Remove deletes file info and index from db
+func (d BoltDB) Remove(f File) error {
+	tx, err := d.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	fileBucket := tx.Bucket(dbFileBucket)
+	indexBucket := tx.Bucket(dbTimeIndexBucket)
+
+	if err := fileBucket.Delete(f.ByteID()); err != nil {
+		return err
+	}
+	if err := indexBucket.Delete(f.indexKey()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// Use updates LastUsage of provided file
+func (d BoltDB) Use(f *File) error {
+	lastUsage := time.Now().Unix()
+	tx, err := d.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	fileBucket := tx.Bucket(dbFileBucket)
+	indexBucket := tx.Bucket(dbTimeIndexBucket)
+
+	if err := indexBucket.Delete(f.indexKey()); err != nil {
+		return err
+	}
+	f.LastUsage = lastUsage
+	if err := indexBucket.Put(f.indexKey(), nil); err != nil {
+		return err
+	}
+	if err := fileBucket.Put(f.ByteID(), f.Bytes()); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
@@ -247,8 +292,8 @@ func (d BoltDB) GetOldFilesCount(deadline time.Time) (count int64, err error) {
 	return count, err
 }
 
-// GetFilesCount is count of files in database
-func (d BoltDB) GetFilesCount() (count int) {
+// Count is count of files in database
+func (d BoltDB) Count() (count int) {
 	d.db.View(func(tx *bolt.Tx) error {
 		count = tx.Bucket(dbFileBucket).Stats().KeyN
 		return nil
@@ -256,7 +301,8 @@ func (d BoltDB) GetFilesCount() (count int) {
 	return
 }
 
-func (d BoltDB) get(id []byte) (f File, err error) {
+// Get loads file from database
+func (d BoltDB) Get(id []byte) (f File, err error) {
 	tx, err := d.db.Begin(false)
 	if err != nil {
 		return f, err

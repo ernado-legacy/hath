@@ -2,12 +2,28 @@ package hath // import "cydev.ru/hath"
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"fmt"
+	"io"
 	"log"
+	"os"
 	"testing"
 	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
+
+func getFileSHA1(name string) (hash string, err error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return
+	}
+	hasher := sha1.New()
+	if _, err = io.Copy(hasher, f); err != nil {
+		return
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
 
 func TestFileSHA1(t *testing.T) {
 	filepath := "test/gopher.jpg"
