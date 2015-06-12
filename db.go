@@ -24,9 +24,18 @@ var (
 
 // DataBase is interface for storing info about files in some DB
 type DataBase interface {
+	Add(f File) error
+	AddBatch(f []File) error
+	Use(f File) error
+	Remove(f File) error
+	RemoveBatch(f []File) error
+	Close() error
 }
 
 // BoltDB stores info about files in cache
+// stores data in b-tree structure
+// stores index on LastUsage+Hash
+// implements DataBase interface
 type BoltDB struct {
 	db *bolt.DB
 }
@@ -61,7 +70,13 @@ func NewDB(dbPath string) (d *BoltDB, err error) {
 	return d, nil
 }
 
-func (d BoltDB) add(f File) error {
+// Close closes boltdb internal database
+func (d BoltDB) Close() error {
+	return d.db.Close()
+}
+
+// Add inserts file info to db
+func (d BoltDB) Add(f File) error {
 	data, err := f.Marshal()
 	if err != nil {
 		return err
@@ -78,16 +93,6 @@ func (d BoltDB) add(f File) error {
 		return err
 	}
 	return tx.Commit()
-}
-
-// Close closes boltdb internal database
-func (d BoltDB) Close() error {
-	return d.db.Close()
-}
-
-// Add inserts file info to db
-func (d BoltDB) Add(f File) error {
-	return d.add(f)
 }
 
 // AddBatch inserts slice of files into db
@@ -127,41 +132,38 @@ func (d BoltDB) AddBatch(files []File) error {
 	return tx.Commit()
 }
 
-// Collect removes files that LastUsage is after deadline
-func (d BoltDB) Collect(deadline time.Time) (int, error) {
+// RemoveBatch remove file and corresponding index records
+func (d BoltDB) RemoveBatch(files []File) error {
+	if len(files) == 0 {
+		return nil
+	}
 	tx, err := d.db.Begin(true)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer tx.Rollback()
 
-	var markedFiles [][]byte
-	min := getIndexStart(deadline)
-	max := getIndexEnd(deadline)
-	c := tx.Bucket(dbTimeIndexBucket).Cursor()
-	for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
-		markedFiles = append(markedFiles, getIDFromIndexKey(k))
-	}
-	for _, k := range markedFiles {
-		if err := tx.Bucket(dbFileBucket).Delete(k); err != nil {
-			return 0, err
+	fileBucket := tx.Bucket(dbFileBucket)
+	indexBucket := tx.Bucket(dbTimeIndexBucket)
+
+	for _, f := range files {
+		if err := fileBucket.Delete(f.ByteID()); err != nil {
+			return err
+		}
+		if err := indexBucket.Delete(f.indexKey()); err != nil {
+			return err
 		}
 	}
-
-	return len(markedFiles), tx.Commit()
+	return tx.Commit()
 }
 
+// getIndexStart returns range start key
 func getIndexStart(deadline time.Time) []byte {
-	timeBytes := make([]byte, timeBytes)
-	// binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
-	hashBytes := make([]byte, HashSize)
-	elems := [][]byte{
-		timeBytes,
-		hashBytes,
-	}
-	return bytes.Join(elems, nil)
+	return make([]byte, timeBytes+HashSize)
 }
 
+// getIndexEnd returns range max possible key,
+// which corresponding file is lastUsage <= deadline
 func getIndexEnd(deadline time.Time) []byte {
 	timeBytes := make([]byte, timeBytes)
 	binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
@@ -176,6 +178,8 @@ func getIndexEnd(deadline time.Time) []byte {
 	return bytes.Join(elems, nil)
 }
 
+// getIDFromIndexKey extracts id from index key byte array
+// index key contains joined timestamp and file id
 func getIDFromIndexKey(id []byte) []byte {
 	hash := make([]byte, HashSize)
 	copy(hash, id[timeBytes:])
@@ -188,24 +192,41 @@ func (d BoltDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err
 		var hashes [][]byte
 		min := getIndexStart(deadline)
 		max := getIndexEnd(deadline)
+
+		// iterating over range of keys in index bucket
+		// min - start of the range, slice of zeroes
+		// max - end of the range, last key with possible LastUsage <= deadline
+		// saving all file ids to hashes slice
 		c := tx.Bucket(dbTimeIndexBucket).Cursor()
 		for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
 			hashes = append(hashes, getIDFromIndexKey(k))
-			if len(hashes) > maxCount {
+			if len(hashes) >= maxCount {
 				break
 			}
 		}
+
+		// nothing found
+		if len(hashes) == 0 {
+			return nil
+		}
+
+		// pre-allocating memory
+		files = make([]File, len(hashes))
+
+		// loading file infos with ids from hashes
 		bucket := tx.Bucket(dbFileBucket)
 		var f File
-		for _, k := range hashes {
+		for i, k := range hashes {
 			data := bucket.Get(k)
+			// possible consistency failure
 			if data == nil {
 				return ErrFileNotFound
 			}
+			// deserializing file info
 			if err = UnmarshalFileTo(data, &f); err != nil {
 				return err
 			}
-			files = append(files, f)
+			files[i] = f
 		}
 		return nil
 	})

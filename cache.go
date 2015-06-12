@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"errors"
-	"fmt"
 	"io"
 	mrand "math/rand"
 	"net/http"
@@ -190,17 +189,6 @@ type FileGenerator struct {
 	TimeDelta     int64
 }
 
-// SumHasher is hasher that can sum
-type SumHasher interface {
-	Sum([]byte) []byte
-}
-
-// GetHexHash extracts hexademical representation
-// from hasher
-func GetHexHash(hasher SumHasher) string {
-	return fmt.Sprintf("%x", hasher.Sum(nil))
-}
-
 // NewFake generates random file without writing it on disk
 func (g FileGenerator) NewFake() (f File) {
 	f.Size = mrand.Int63n(g.SizeMax-g.SizeMin) + g.SizeMin
@@ -226,7 +214,7 @@ func (g FileGenerator) NewFake() (f File) {
 	return f
 }
 
-// New generates random file and returns it
+// New generates random file and returns it, writing on disk
 func (g FileGenerator) New() (f File, err error) {
 	// initializing fields with random data
 	f = g.NewFake()

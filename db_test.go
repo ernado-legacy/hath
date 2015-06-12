@@ -70,7 +70,7 @@ func TestDBInit(t *testing.T) {
 		So(db, ShouldNotBeNil)
 		Convey("Insert", func() {
 			rec := g.NewFake()
-			err := db.add(rec)
+			err := db.Add(rec)
 			So(err, ShouldBeNil)
 			Convey("Get", func() {
 				f, err := db.get(rec.ByteID())
