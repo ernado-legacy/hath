@@ -37,6 +37,7 @@ const (
 	actionGetBlacklist = "get_blacklist"
 	actionStillAlive   = "still_alive"
 	actionStatistics   = "server_stat"
+	actionSettings     = "client_settings"
 
 	responseOK                       = "OK"
 	responseKeyExpired               = "KEY_EXPIRED"
@@ -282,6 +283,33 @@ func (c Client) CheckStats() error {
 		return ErrClientVersionOld
 	}
 	return nil
+}
+
+// Settings of hath client
+type Settings struct {
+	RPCServer             string
+	ImageServers          string
+	RequestServer         string
+	DisableBWM            bool
+	RequestProxyMode      int
+	StaticRanges          StaticRanges
+	Name                  string
+	Host                  string
+	Port                  int
+	MaximumBytesPerSecond int64
+	MaximumCacheSize      int64
+	DiskReamainingBytes   int64
+}
+
+// Settings from server
+func (c Client) Settings() error {
+	r, err := c.getResponse(actionSettings)
+	vars := r.ParseVars()
+	for k, v := range vars {
+		log.Println(k, "=", v)
+	}
+	log.Println(r.Success, r.Message)
+	return err
 }
 
 // NewClient creates new client for api

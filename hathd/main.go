@@ -7,7 +7,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"path"
-	"time"
 
 	"cydev.ru/hath"
 )
@@ -46,7 +45,9 @@ func main() {
 	if err := c.CheckStats(); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("time", time.Now().Unix())
+	if err := c.Settings(); err != nil {
+		log.Fatal(err)
+	}
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
