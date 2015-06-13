@@ -189,6 +189,17 @@ func TestFileID(t *testing.T) {
 			actual := f.Path()
 			So(expected, ShouldEqual, actual)
 		})
+		Convey("Static ranges", func() {
+			ranges := make(StaticRanges)
+			r := StaticRange([staticRangeBytes]byte{0x07, 0x0b})
+			ranges.Add(r)
+			So(f.InRange(r), ShouldBeTrue)
+			So(ranges.Contains(f), ShouldBeTrue)
+			Convey("Remove", func() {
+				ranges.Remove(r)
+				So(ranges.Contains(f), ShouldBeFalse)
+			})
+		})
 		Convey("Parsing", func() {
 			fid := "070b45ae488fb1967aaf618561a7d6ba4d28a1c9-12345-1920-1080-png"
 			parsed, err := FileFromID(fid)

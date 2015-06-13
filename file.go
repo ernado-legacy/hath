@@ -21,15 +21,42 @@ const (
 	keyStampEnd  = "hotlinkthis"
 	prefixLenght = 2
 	// HashSize is length of sha1 hash in bytes
-	HashSize        = 20
-	sizeBytes       = 4
-	resolutionBytes = 2
-	fileBytes       = 38
-	keyStampLength  = 10
+	HashSize         = 20
+	sizeBytes        = 4
+	resolutionBytes  = 2
+	fileBytes        = 38
+	keyStampLength   = 10
+	staticRangeBytes = 2
 )
 
 // FileType represents file format of image
 type FileType byte
+
+// StaticRange is prefix for static ranges assigned to user
+type StaticRange [staticRangeBytes]byte
+
+// StaticRanges contain ranges
+type StaticRanges map[StaticRange]bool
+
+// Contains returns true if file f is in static ranges
+func (s StaticRanges) Contains(f File) bool {
+	return s[f.Range()]
+}
+
+// Add static range
+func (s StaticRanges) Add(r StaticRange) {
+	s[r] = true
+}
+
+// Remove static range
+func (s StaticRanges) Remove(r StaticRange) {
+	delete(s, r)
+}
+
+// Count of static ranges
+func (s StaticRanges) Count() int {
+	return len(s)
+}
 
 func (f FileType) String() string {
 	if f == JPG {
@@ -90,6 +117,17 @@ type File struct {
 	Height int   `json:"height"` // 2 byte
 	// LastUsage is Unix timestamp
 	LastUsage int64 `json:"last_usage"` // 8 byte (can be optimized)
+}
+
+// Range returns static range of file
+func (f File) Range() (r StaticRange) {
+	copy(r[:], f.Hash[:staticRangeBytes])
+	return r
+}
+
+// InRange returns true if file is in static range r
+func (f File) InRange(r StaticRange) bool {
+	return bytes.Equal(r[:], f.Hash[:staticRangeBytes])
 }
 
 // Bytes serializes file info into byte array
