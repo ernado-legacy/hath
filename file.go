@@ -27,6 +27,11 @@ const (
 	fileBytes        = 38
 	keyStampLength   = 10
 	staticRangeBytes = 2
+
+	// file size limitations
+	size10MB = 1024 * 1024 * 10
+	// FileMaximumSize is maximum image size in hath
+	FileMaximumSize = size10MB
 )
 
 // FileType represents file format of image

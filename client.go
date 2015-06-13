@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,17 +28,23 @@ const (
 	argActionKey      = "actkey"
 	argTime           = "acttime"
 
+	statTime     = "server_time"
+	statMinBuild = "min_client_build"
+
 	actionKeyStart     = "hentai@home"
 	actionKeyDelimiter = "-"
 	actionStart        = "client_start"
 	actionGetBlacklist = "get_blacklist"
 	actionStillAlive   = "still_alive"
+	actionStatistics   = "server_stat"
 
 	responseOK                       = "OK"
 	responseKeyExpired               = "KEY_EXPIRED"
 	responseFailConnectTest          = "FAIL_CONNECT_TEST"
 	responseFailStartupFlood         = "FAIL_STARTUP_FLOOD"
 	responseFailOtherClientConnected = "FAIL_OTHER_CLIENT_CONNECTED"
+
+	maximumTimeLag = 10
 
 	httpGET           = "GET"
 	intBase           = 10
@@ -56,6 +63,10 @@ var (
 	ErrClientOtherConnected = errors.New("Other client is connected")
 	// ErrClientUnexpectedResponse unexpected/unhandler error
 	ErrClientUnexpectedResponse = errors.New("Unexpected error")
+	// ErrTimeDesync timestamp delta too bit
+	ErrTimeDesync = errors.New("Time on server and on client differ too much")
+	// ErrClientVersionOld api outdated
+	ErrClientVersionOld = errors.New("Client version is too old")
 )
 
 // APIResponse represents response from rpc api
@@ -220,10 +231,57 @@ func (c Client) StillAlive() error {
 	if err != nil {
 		return err
 	}
-	if r.Success {
-		return nil
+	if !r.Success {
+		return ErrClientUnexpectedResponse
 	}
-	return ErrClientUnexpectedResponse
+	return nil
+}
+
+// ParseVars parses k=v map from r.Data
+func (r APIResponse) ParseVars() map[string]string {
+	data := make(map[string]string)
+	for _, d := range r.Data {
+		d = strings.TrimSpace(d)
+		vars := strings.Split(d, "=")
+		if len(vars) != 2 {
+			continue
+		}
+		k := strings.TrimSpace(vars[0])
+		v := strings.TrimSpace(vars[1])
+		data[k] = v
+	}
+	return data
+}
+
+// CheckStats checks time desync and minumum client build
+func (c Client) CheckStats() error {
+	r, err := c.getResponse(actionStatistics)
+	if err != nil {
+		return err
+	}
+	vars := r.ParseVars()
+	serverTime, err := strconv.ParseInt(vars[statTime], intBase, 64)
+	if err != nil {
+		return ErrClientUnexpectedResponse
+	}
+	delta := time.Now().Unix() - serverTime
+	if delta < 0 {
+		delta *= -1
+	}
+	if delta > maximumTimeLag {
+		return ErrTimeDesync
+	}
+	if delta == 0 {
+		log.Println("your time is perfectly synced")
+	}
+	serverMinBuild, err := strconv.ParseInt(vars[statMinBuild], intBase, 64)
+	if err != nil {
+		return ErrClientUnexpectedResponse
+	}
+	if serverMinBuild > clientBuild {
+		return ErrClientVersionOld
+	}
+	return nil
 }
 
 // NewClient creates new client for api

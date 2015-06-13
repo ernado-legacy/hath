@@ -73,6 +73,11 @@ func NewDirectFrontend(cache DirectCache) Frontend {
 	return &DirectFrontend{cache}
 }
 
+func NewFrontend(dir string) Frontend {
+	cache := &FileCache{dir}
+	return &DirectFrontend{cache}
+}
+
 // Some boilerplate code to make DirectFrontend implement DirectCache
 // can be example for implementing other Frontend's
 
