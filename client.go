@@ -239,7 +239,7 @@ func (c Client) StillAlive() error {
 }
 
 // ParseVars parses k=v map from r.Data
-func (r APIResponse) ParseVars() map[string]string {
+func (r APIResponse) ParseVars() Vars {
 	data := make(map[string]string)
 	for _, d := range r.Data {
 		d = strings.TrimSpace(d)
@@ -252,6 +252,29 @@ func (r APIResponse) ParseVars() map[string]string {
 		data[k] = v
 	}
 	return data
+}
+
+// Vars represents k-v map from APIResponse.Data
+type Vars map[string]string
+
+// Get string
+func (v Vars) Get(k string) string {
+	return v[k]
+}
+
+// GetInt parses int
+func (v Vars) GetInt(k string) (int, error) {
+	return strconv.Atoi(v.Get(k))
+}
+
+// GetInt64 parses int64
+func (v Vars) GetInt64(k string) (int64, error) {
+	return strconv.ParseInt(k, intBase, 64)
+}
+
+// GetUint64 parses uint64
+func (v Vars) GetUint64(k string) (uint64, error) {
+	return strconv.ParseUint(k, intBase, 64)
 }
 
 // CheckStats checks time desync and minumum client build
@@ -287,9 +310,9 @@ func (c Client) CheckStats() error {
 
 // Settings of hath client
 type Settings struct {
-	RPCServer             string
+	RPCServers            string
 	ImageServers          string
-	RequestServer         string
+	RequestServers        string
 	DisableBWM            bool
 	RequestProxyMode      int
 	StaticRanges          StaticRanges
