@@ -6,23 +6,28 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"path"
 
 	"cydev.ru/hath"
+
+	"github.com/BurntSushi/toml"
 )
 
 const version = "0.1a"
 
 var (
-	clientID  int64
-	dir       string
-	clientKey string
+	clientID        int64
+	dir             string
+	clientKey       string
+	credentialsPath string
 )
 
 func init() {
 	flag.Int64Var(&clientID, "client-id", 0, "Hentai@Home client id")
 	flag.StringVar(&clientKey, "client-key", "", "Hentai@Home client key")
 	flag.StringVar(&dir, "dir", "hath", "working directory")
+	flag.StringVar(&credentialsPath, "cfg", "cfg.toml", "Path to credentials")
 }
 
 func main() {
@@ -35,6 +40,17 @@ func main() {
 	}
 	credentials := hath.Credentials{ClientID: clientID, Key: clientKey}
 	cfg := hath.ServerConfig{}
+	if len(credentialsPath) != 0 {
+		f, err := os.Open(credentialsPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = toml.DecodeReader(f, &credentials)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("credentials loaded", credentials)
+	}
 	cfg.Credentials = credentials
 	cfg.Frontend = frontend
 	cfg.DataBase = db
@@ -43,7 +59,7 @@ func main() {
 	clientCfg.Credentials = credentials
 	c := hath.NewClient(clientCfg)
 	if err := c.CheckStats(); err != nil {
-		log.Fatal(err)
+		log.Fatal("check stats:", err)
 	}
 	if err := c.Settings(); err != nil {
 		log.Fatal(err)

@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	avgFileSize uint64 = 493 * 1024 // 493kb
+	avgFileSize       uint64 = 493 * 1024 // 493kb
+	headerContentType        = "Content-Type"
 )
 
 var (
@@ -58,9 +59,11 @@ func (d *DirectFrontend) Handle(file File, w http.ResponseWriter) error {
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		return err
+		return ErrUnexpected{Err: err}
 	}
+
 	defer f.Close()
+	w.Header().Add(headerContentType, file.ContentType())
 	n, err := io.Copy(w, f)
 	if n != file.Size {
 		return ErrFileBadLength

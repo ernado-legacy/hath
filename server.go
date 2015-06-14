@@ -36,6 +36,22 @@ const (
 	timestampMaxDelta = 60
 )
 
+// ProxyMode sets proxy security politics
+type ProxyMode byte
+
+const (
+	// ProxyDisabled no requests allowed
+	ProxyDisabled ProxyMode = iota
+	// ProxyLocalNetworksProtected allows requests from local network with passkey
+	ProxyLocalNetworksProtected
+	// ProxyLocalNetworksOpen allows any requests from local network
+	ProxyLocalNetworksOpen
+	// ProxyAllNetworksProtected allows requests from any network with passkey (not recommended)
+	ProxyAllNetworksProtected
+	// ProxyAllNetworksOpen allows any requests from any network (very not recommended)
+	ProxyAllNetworksOpen
+)
+
 // Args represents additional arguments in request string
 type Args map[string]string
 

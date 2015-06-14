@@ -83,6 +83,10 @@ func TestServer(t *testing.T) {
 			_, err = io.CopyN(hash, res.Body, f.Size)
 			So(err, ShouldBeNil)
 			So(bytes.Equal(hash.Sum(nil), f.ByteID()), ShouldBeTrue)
+			Convey("Content type should be ok", func() {
+				ct := res.Header.Get(headerContentType)
+				So(ct, ShouldEqual, f.ContentType())
+			})
 		})
 		Convey("GET with no db consistency", func() {
 			f, err := g.New()

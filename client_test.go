@@ -121,7 +121,7 @@ func TestClientRequest(t *testing.T) {
 						responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
 						c.httpClient = testClient{nil, responce, nil}
 						err := c.StillAlive()
-						So(err, ShouldEqual, ErrClientUnexpectedResponse)
+						So(IsUnexpected(err), ShouldBeTrue)
 					})
 				})
 			})
@@ -165,7 +165,7 @@ func TestClientRequest(t *testing.T) {
 						So(getError("FAIL_CONNECT_TEST"), ShouldEqual, ErrClientFailedConnectionTest)
 						So(getError("FAIL_STARTUP_FLOOD"), ShouldEqual, ErrClientStartupFlood)
 						So(getError("FAIL_OTHER_CLIENT_CONNECTED"), ShouldEqual, ErrClientOtherConnected)
-						So(getError("FAIL_WTF"), ShouldEqual, ErrClientUnexpectedResponse)
+						So(IsUnexpected(getError("FAIL_WTF")), ShouldBeTrue)
 						So(getError("KEY_EXPIRED"), ShouldEqual, ErrClientKeyExpired)
 					})
 				})

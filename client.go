@@ -39,6 +39,8 @@ const (
 	actionStatistics   = "server_stat"
 	actionSettings     = "client_settings"
 
+	settingStaticRanges = "static_ranges"
+
 	responseOK                       = "OK"
 	responseKeyExpired               = "KEY_EXPIRED"
 	responseFailConnectTest          = "FAIL_CONNECT_TEST"
@@ -98,6 +100,25 @@ type ClientConfig struct {
 type Client struct {
 	cfg        ClientConfig
 	httpClient HTTPClient
+}
+
+// ErrUnexpected error while processing request/response
+type ErrUnexpected struct {
+	Err      error
+	Response APIResponse
+}
+
+// IsUnexpected return true if err is ErrUnexpected or ErrClientUnexpectedResponse
+func IsUnexpected(err error) bool {
+	if err == ErrClientUnexpectedResponse {
+		return true
+	}
+	_, ok := err.(ErrUnexpected)
+	return ok
+}
+
+func (e ErrUnexpected) Error() string {
+	return fmt.Sprintf("Unexpected error %s: %v", e.Err, e.Response)
 }
 
 func sInt64(i int64) string {
@@ -216,7 +237,7 @@ func (c Client) Start() error {
 	if strings.HasPrefix(r.Message, responseFailOtherClientConnected) {
 		return ErrClientOtherConnected
 	}
-	return ErrClientUnexpectedResponse
+	return ErrUnexpected{Response: r}
 }
 
 // func (c Client) getBlacklist(d time.Duration) error {
@@ -233,7 +254,7 @@ func (c Client) StillAlive() error {
 		return err
 	}
 	if !r.Success {
-		return ErrClientUnexpectedResponse
+		return ErrUnexpected{Response: r}
 	}
 	return nil
 }
@@ -269,24 +290,42 @@ func (v Vars) GetInt(k string) (int, error) {
 
 // GetInt64 parses int64
 func (v Vars) GetInt64(k string) (int64, error) {
-	return strconv.ParseInt(k, intBase, 64)
+	return strconv.ParseInt(v.Get(k), intBase, 64)
 }
 
 // GetUint64 parses uint64
 func (v Vars) GetUint64(k string) (uint64, error) {
-	return strconv.ParseUint(k, intBase, 64)
+	return strconv.ParseUint(v.Get(k), intBase, 64)
+}
+
+// GetStaticRange parses static range list
+func (v Vars) GetStaticRange(k string) (s StaticRanges, err error) {
+	elems := strings.Split(v.Get(k), staticRangeDelimiter)
+	s = make(StaticRanges)
+	for _, elem := range elems {
+		if len(elem) == 0 {
+			continue
+		}
+		r, err := ParseStaticRange(elem)
+		if err != nil {
+			return s, err
+		}
+		s.Add(r)
+	}
+	return s, err
 }
 
 // CheckStats checks time desync and minumum client build
+// returns nil, of time is synced and client version is up to date
 func (c Client) CheckStats() error {
 	r, err := c.getResponse(actionStatistics)
 	if err != nil {
 		return err
 	}
 	vars := r.ParseVars()
-	serverTime, err := strconv.ParseInt(vars[statTime], intBase, 64)
+	serverTime, err := vars.GetInt64(statTime)
 	if err != nil {
-		return ErrClientUnexpectedResponse
+		return ErrUnexpected{Response: r, Err: err}
 	}
 	delta := time.Now().Unix() - serverTime
 	if delta < 0 {
@@ -298,9 +337,9 @@ func (c Client) CheckStats() error {
 	if delta == 0 {
 		log.Println("your time is perfectly synced")
 	}
-	serverMinBuild, err := strconv.ParseInt(vars[statMinBuild], intBase, 64)
+	serverMinBuild, err := vars.GetInt(statMinBuild)
 	if err != nil {
-		return ErrClientUnexpectedResponse
+		return ErrUnexpected{Response: r, Err: err}
 	}
 	if serverMinBuild > clientBuild {
 		return ErrClientVersionOld
@@ -310,10 +349,10 @@ func (c Client) CheckStats() error {
 
 // Settings of hath client
 type Settings struct {
-	RPCServers            string
-	ImageServers          string
-	RequestServers        string
-	DisableBWM            bool
+	RPCServers            []string
+	ImageServers          []string
+	RequestServers        []string
+	LowMemory             bool
 	RequestProxyMode      int
 	StaticRanges          StaticRanges
 	Name                  string
@@ -331,6 +370,8 @@ func (c Client) Settings() error {
 	for k, v := range vars {
 		log.Println(k, "=", v)
 	}
+	ranges, err := vars.GetStaticRange(settingStaticRanges)
+	log.Println("static ranges:", ranges)
 	log.Println(r.Success, r.Message)
 	return err
 }

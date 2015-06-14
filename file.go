@@ -21,12 +21,14 @@ const (
 	keyStampEnd  = "hotlinkthis"
 	prefixLenght = 2
 	// HashSize is length of sha1 hash in bytes
-	HashSize         = 20
-	sizeBytes        = 4
-	resolutionBytes  = 2
-	fileBytes        = 38
-	keyStampLength   = 10
-	staticRangeBytes = 2
+	HashSize             = 20
+	sizeBytes            = 4
+	resolutionBytes      = 2
+	fileBytes            = 38
+	keyStampLength       = 10
+	staticRangeBytes     = 2
+	staticRangeHexLength = 4
+	staticRangeDelimiter = ";"
 
 	// file size limitations
 	size10MB = 1024 * 1024 * 10
@@ -39,6 +41,23 @@ type FileType byte
 
 // StaticRange is prefix for static ranges assigned to user
 type StaticRange [staticRangeBytes]byte
+
+func (s StaticRange) String() string {
+	return hex.EncodeToString(s[:])
+}
+
+// ParseStaticRange parses hex string static range start
+func ParseStaticRange(s string) (r StaticRange, err error) {
+	if len(s) != staticRangeHexLength {
+		return r, io.ErrUnexpectedEOF
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return r, err
+	}
+	copy(r[:], b[:])
+	return r, err
+}
 
 // StaticRanges contain ranges
 type StaticRanges map[StaticRange]bool
@@ -63,6 +82,14 @@ func (s StaticRanges) Count() int {
 	return len(s)
 }
 
+func (s StaticRanges) String() string {
+	var elems []string
+	for k := range s {
+		elems = append(elems, k.String())
+	}
+	return strings.Join(elems, staticRangeDelimiter)
+}
+
 func (f FileType) String() string {
 	if f == JPG {
 		return "jpg"
@@ -85,6 +112,16 @@ const (
 	GIF
 	// UnknownImage is not supported format
 	UnknownImage
+)
+
+var (
+	// ContentTypes is map of file types to conent types
+	ContentTypes = map[FileType]string{
+		JPG:          "image/jpeg",
+		PNG:          "image/png",
+		GIF:          "image/gif",
+		UnknownImage: "application/octet-stream",
+	}
 )
 
 var (
@@ -122,6 +159,11 @@ type File struct {
 	Height int   `json:"height"` // 2 byte
 	// LastUsage is Unix timestamp
 	LastUsage int64 `json:"last_usage"` // 8 byte (can be optimized)
+}
+
+// ContentType of image
+func (f File) ContentType() string {
+	return ContentTypes[f.Type]
 }
 
 // Range returns static range of file
