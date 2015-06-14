@@ -372,6 +372,8 @@ func (c Client) Settings() error {
 	}
 	ranges, err := vars.GetStaticRange(settingStaticRanges)
 	log.Println("static ranges:", ranges)
+	log.Println("static ranges count:", ranges.Count())
+
 	log.Println(r.Success, r.Message)
 	return err
 }

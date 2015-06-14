@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/big"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -87,6 +88,7 @@ func (s StaticRanges) String() string {
 	for k := range s {
 		elems = append(elems, k.String())
 	}
+	sort.Strings(elems)
 	return strings.Join(elems, staticRangeDelimiter)
 }
 
