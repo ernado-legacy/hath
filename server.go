@@ -41,16 +41,41 @@ type ProxyMode byte
 
 const (
 	// ProxyDisabled no requests allowed
-	ProxyDisabled ProxyMode = iota
+	ProxyDisabled ProxyMode = iota + 1 // starts with 1
 	// ProxyLocalNetworksProtected allows requests from local network with passkey
-	ProxyLocalNetworksProtected
+	ProxyLocalNetworksProtected // 2
 	// ProxyLocalNetworksOpen allows any requests from local network
-	ProxyLocalNetworksOpen
+	ProxyLocalNetworksOpen // 3
 	// ProxyAllNetworksProtected allows requests from any network with passkey (not recommended)
-	ProxyAllNetworksProtected
+	ProxyAllNetworksProtected // 4
 	// ProxyAllNetworksOpen allows any requests from any network (very not recommended)
-	ProxyAllNetworksOpen
+	ProxyAllNetworksOpen // 5
 )
+
+const (
+	proxyModeMin  = int64(ProxyDisabled)
+	proxyModeMax  = int64(ProxyAllNetworksOpen)
+	proxyModeBits = 4
+)
+
+func (p ProxyMode) String() string {
+	if p == ProxyDisabled {
+		return "disabled"
+	}
+	if p == ProxyLocalNetworksOpen {
+		return "open for local networks"
+	}
+	if p == ProxyAllNetworksProtected {
+		return "local networks with passkey"
+	}
+	if p == ProxyAllNetworksProtected {
+		return "all networks with passkey"
+	}
+	if p == ProxyAllNetworksOpen {
+		return "open for all networks"
+	}
+	return "unknown"
+}
 
 // Args represents additional arguments in request string
 type Args map[string]string

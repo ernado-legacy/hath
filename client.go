@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -315,6 +316,21 @@ func (v Vars) GetStaticRange(k string) (s StaticRanges, err error) {
 	return s, err
 }
 
+// GetProxyMode parses ProxyMode
+func (v Vars) GetProxyMode(k string) (p ProxyMode, err error) {
+	modeInt, err := strconv.ParseInt(v.Get(k), intBase, proxyModeBits)
+	if err != nil {
+		return p, err
+	}
+	// check overflow of ProxyMode
+	if modeInt < proxyModeMin || modeInt > proxyModeMax {
+		r := APIResponse{Message: v.Get(k)}
+		err = ErrUnexpected{Err: errors.New("ProxyMode overflow"), Response: r}
+		return p, err
+	}
+	return ProxyMode(modeInt), nil
+}
+
 // CheckStats checks time desync and minumum client build
 // returns nil, of time is synced and client version is up to date
 func (c Client) CheckStats() error {
@@ -353,10 +369,10 @@ type Settings struct {
 	ImageServers          []string
 	RequestServers        []string
 	LowMemory             bool
-	RequestProxyMode      int
+	ProxyMode             ProxyMode
 	StaticRanges          StaticRanges
 	Name                  string
-	Host                  string
+	Host                  net.IP
 	Port                  int
 	MaximumBytesPerSecond int64
 	MaximumCacheSize      int64
@@ -365,16 +381,40 @@ type Settings struct {
 
 // Settings from server
 func (c Client) Settings() error {
+	cfg := Settings{}
 	r, err := c.getResponse(actionSettings)
 	vars := r.ParseVars()
 	for k, v := range vars {
 		log.Println(k, "=", v)
 	}
-	ranges, err := vars.GetStaticRange(settingStaticRanges)
-	log.Println("static ranges:", ranges)
-	log.Println("static ranges count:", ranges.Count())
+	cfg.StaticRanges, err = vars.GetStaticRange(settingStaticRanges)
+	if err != nil {
+		return err
+	}
+	cfg.Port, err = vars.GetInt("port")
+	if err != nil {
+		return err
+	}
+	cfg.Host = net.ParseIP(vars.Get("host"))
+
+	cfg.MaximumBytesPerSecond, err = vars.GetInt64("throttle_bytes")
+	if err != nil {
+		return err
+	}
+
+	cfg.MaximumCacheSize, err = vars.GetInt64("disklimit_bytes")
+	if err != nil {
+		return err
+	}
+
+	cfg.Name = vars.Get("name")
+	cfg.ProxyMode, err = vars.GetProxyMode("request_proxy_mode")
+
+	log.Println("static ranges:", cfg.StaticRanges)
+	log.Println("static ranges count:", cfg.StaticRanges.Count())
 
 	log.Println(r.Success, r.Message)
+	log.Println(cfg)
 	return err
 }
 
