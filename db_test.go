@@ -75,6 +75,7 @@ func TestDBInit(t *testing.T) {
 		})
 		Convey("Insert", func() {
 			rec := g.NewFake()
+			rec.LastUsage -= 20
 			err := db.Add(rec)
 			So(err, ShouldBeNil)
 			Convey("Get", func() {
@@ -84,6 +85,15 @@ func TestDBInit(t *testing.T) {
 				So(f.Type, ShouldEqual, rec.Type)
 				So(f.HexID(), ShouldEqual, rec.HexID())
 				So(f.String(), ShouldEqual, rec.String())
+				Convey("Use", func() {
+					So(db.Use(f), ShouldBeNil)
+					Convey("Get again", func() {
+						fn, err := db.Get(rec.ByteID())
+						So(err, ShouldBeNil)
+						So(f.String(), ShouldEqual, fn.String())
+						So(f.LastUsage, ShouldNotEqual, fn.LastUsage)
+					})
+				})
 			})
 			Convey("Get 404", func() {
 				rec := g.NewFake()

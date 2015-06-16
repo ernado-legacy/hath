@@ -126,8 +126,7 @@ func (d BoltDB) AddBatch(files []File) error {
 	bucket := tx.Bucket(dbFileBucket)
 	index := tx.Bucket(dbTimeIndexBucket)
 	for _, f := range files {
-		data := d.serialize(f)
-		if err := bucket.Put(f.ByteID(), data); err != nil {
+		if err := bucket.Put(f.ByteID(), d.serialize(f)); err != nil {
 			return err
 		}
 		if err := index.Put(f.indexKey(), nil); err != nil {
@@ -208,7 +207,7 @@ func (d BoltDB) Use(f File) error {
 	if err := indexBucket.Put(f.indexKey(), nil); err != nil {
 		return err
 	}
-	if err := fileBucket.Put(f.ByteID(), f.Bytes()); err != nil {
+	if err := fileBucket.Put(f.ByteID(), d.serialize(f)); err != nil {
 		return err
 	}
 
