@@ -61,7 +61,7 @@ func main() {
 	if err := c.CheckStats(); err != nil {
 		log.Fatal("check stats:", err)
 	}
-	if err := c.Settings(); err != nil {
+	if _, err := c.Settings(); err != nil {
 		log.Fatal(err)
 	}
 	go func() {

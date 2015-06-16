@@ -196,8 +196,9 @@ func TestClientRequest(t *testing.T) {
 					responce.StatusCode = http.StatusOK
 					responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
 					c.httpClient = testClient{nil, responce, nil}
-					err := c.Settings()
+					cfg, err := c.Settings()
 					So(err, ShouldBeNil)
+					So(cfg.Name, ShouldEqual, "Ernado RU")
 				})
 			})
 			Convey("Check stats", func() {

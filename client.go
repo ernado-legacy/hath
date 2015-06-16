@@ -380,8 +380,7 @@ type Settings struct {
 }
 
 // Settings from server
-func (c Client) Settings() error {
-	cfg := Settings{}
+func (c Client) Settings() (cfg Settings, err error) {
 	r, err := c.getResponse(actionSettings)
 	vars := r.ParseVars()
 	for k, v := range vars {
@@ -389,33 +388,27 @@ func (c Client) Settings() error {
 	}
 	cfg.StaticRanges, err = vars.GetStaticRange(settingStaticRanges)
 	if err != nil {
-		return err
+		return cfg, err
 	}
 	cfg.Port, err = vars.GetInt("port")
 	if err != nil {
-		return err
+		return cfg, err
 	}
 	cfg.Host = net.ParseIP(vars.Get("host"))
 
 	cfg.MaximumBytesPerSecond, err = vars.GetInt64("throttle_bytes")
 	if err != nil {
-		return err
+		return cfg, err
 	}
 
 	cfg.MaximumCacheSize, err = vars.GetInt64("disklimit_bytes")
 	if err != nil {
-		return err
+		return cfg, err
 	}
 
 	cfg.Name = vars.Get("name")
 	cfg.ProxyMode, err = vars.GetProxyMode("request_proxy_mode")
-
-	log.Println("static ranges:", cfg.StaticRanges)
-	log.Println("static ranges count:", cfg.StaticRanges.Count())
-
-	log.Println(r.Success, r.Message)
-	log.Println(cfg)
-	return err
+	return cfg, err
 }
 
 // NewClient creates new client for api
