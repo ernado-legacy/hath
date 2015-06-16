@@ -86,12 +86,14 @@ func TestDBInit(t *testing.T) {
 				So(f.HexID(), ShouldEqual, rec.HexID())
 				So(f.String(), ShouldEqual, rec.String())
 				Convey("Use", func() {
+					now := time.Now().Unix()
 					So(db.Use(f), ShouldBeNil)
 					Convey("Get again", func() {
 						fn, err := db.Get(rec.ByteID())
 						So(err, ShouldBeNil)
 						So(f.String(), ShouldEqual, fn.String())
 						So(f.LastUsage, ShouldNotEqual, fn.LastUsage)
+						So(fn.LastUsage, ShouldEqual, now)
 					})
 				})
 			})

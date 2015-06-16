@@ -52,6 +52,57 @@ func TestClientURL(t *testing.T) {
 	})
 }
 
+func TestParseVars(t *testing.T) {
+	Convey("Parsing vars", t, func() {
+		res := APIResponse{}
+		res.Data = append(res.Data, "s= pek ")
+		res.Data = append(res.Data, "  int=1123")
+		res.Data = append(res.Data, "int64=  75565  ")
+		res.Data = append(res.Data, "uint64=6675565")
+		res.Data = append(res.Data, "  int64-2=75565=????!!11")
+		res.Data = append(res.Data, "ranges   = aaaa;bbbb;cccc;ffff;")
+		res.Data = append(res.Data, "badranges=aaaa;bbbb;cccc;fockyo;")
+		vars := res.ParseVars()
+		So(len(vars), ShouldEqual, 6)
+		Convey("String", func() {
+			So(vars.Get("s"), ShouldEqual, "pek")
+		})
+		Convey("Int", func() {
+			v, err := vars.GetInt("int")
+			So(err, ShouldBeNil)
+			So(v, ShouldEqual, 1123)
+		})
+		Convey("Int64", func() {
+			v, err := vars.GetInt64("int64")
+			So(err, ShouldBeNil)
+			So(v, ShouldEqual, 75565)
+		})
+		Convey("UInt64", func() {
+			v, err := vars.GetUint64("uint64")
+			So(err, ShouldBeNil)
+			So(v, ShouldEqual, 6675565)
+		})
+		Convey("Bad data", func() {
+			So(vars.Get("int64-2"), ShouldEqual, "")
+		})
+		Convey("Static ranges", func() {
+			So(vars.Get("ranges"), ShouldEqual, "aaaa;bbbb;cccc;ffff;")
+			ranges, err := vars.GetStaticRange("ranges")
+			So(err, ShouldBeNil)
+			So(ranges.String(), ShouldEqual, "aaaa;bbbb;cccc;ffff")
+			So(ranges[StaticRange{0xaa, 0xaa}], ShouldBeTrue)
+			So(ranges[StaticRange{0xbb, 0xbb}], ShouldBeTrue)
+			So(ranges[StaticRange{0xcc, 0xcc}], ShouldBeTrue)
+			So(ranges[StaticRange{0xff, 0xff}], ShouldBeTrue)
+			So(ranges[StaticRange{0xee, 0xee}], ShouldBeFalse)
+			Convey("Bad static ranges", func() {
+				_, err := vars.GetStaticRange("badranges")
+				So(err, ShouldNotBeNil)
+			})
+		})
+	})
+}
+
 func TestClientRequest(t *testing.T) {
 	var (
 		cid int64 = 666
