@@ -74,12 +74,21 @@ func (d BoltDB) Close() error {
 	return d.db.Close()
 }
 
+func (d BoltDB) serialize(f File) []byte {
+	data := f.Bytes()
+	result := make([]byte, len(data)-HashSize)
+	copy(result[:], data[HashSize:])
+	return result
+}
+
+func (d BoltDB) deserialize(k, v []byte, f *File) error {
+	data := bytes.Join([][]byte{k, v}, nil)
+	return FileFromBytesTo(data, f)
+}
+
 // Add inserts file info to db
 func (d BoltDB) Add(f File) error {
-	data, err := f.Marshal()
-	if err != nil {
-		return err
-	}
+	data := d.serialize(f)
 	tx, err := d.db.Begin(true)
 	defer tx.Rollback()
 	if err != nil {
@@ -117,10 +126,7 @@ func (d BoltDB) AddBatch(files []File) error {
 	bucket := tx.Bucket(dbFileBucket)
 	index := tx.Bucket(dbTimeIndexBucket)
 	for _, f := range files {
-		data, err := f.Marshal()
-		if err != nil {
-			return err
-		}
+		data := d.serialize(f)
 		if err := bucket.Put(f.ByteID(), data); err != nil {
 			return err
 		}
@@ -275,7 +281,7 @@ func (d BoltDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err
 				return ErrFileNotFound
 			}
 			// deserializing file info
-			if err = UnmarshalFileTo(data, &f); err != nil {
+			if err = d.deserialize(k, data, &f); err != nil {
 				return err
 			}
 			files[i] = f
@@ -325,5 +331,5 @@ func (d BoltDB) Get(id []byte) (f File, err error) {
 		return f, err
 	}
 
-	return UnmarshalFile(data)
+	return f, d.deserialize(id, data, &f)
 }
