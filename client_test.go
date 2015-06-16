@@ -3,10 +3,12 @@ package hath // import "cydev.ru/hath"
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -174,6 +176,40 @@ func TestClientRequest(t *testing.T) {
 						err := c.StillAlive()
 						So(IsUnexpected(err), ShouldBeTrue)
 					})
+				})
+			})
+			Convey("Settings", func() {
+				Convey("OK", func() {
+					responce := new(http.Response)
+					body := "OK\n" +
+						"rpc_server_ip=::ffff:94.100.22.210;::ffff:94.100.18.170\n" +
+						"image_server=ul.e-hentai.org\n" +
+						"name=Ernado RU\n" +
+						"host=::ffff:213.141.142.4\n" +
+						"port=55555\n" + "throttle_bytes=10280000\n" +
+						"hourbwlimit_bytes=0\n" + "disklimit_bytes=32212254720\n" +
+						"diskremaining_bytes=21474836480\n" +
+						"request_server=g.e-hentai.org\n" +
+						"request_proxy_mode=4\n" +
+						"disable_bwm=true\n" +
+						"static_ranges=05b8;084f;0b63;37aa;3ade;3fe9;40f8;41e7;434c;4e9d;5830;619c;6b6b;6bd6;76f7;7711;8799;8c75;a247;b540;bbd6;d497;ddc4;e1d8;e48c;e752\n"
+					responce.StatusCode = http.StatusOK
+					responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+					c.httpClient = testClient{nil, responce, nil}
+					err := c.Settings()
+					So(err, ShouldBeNil)
+				})
+			})
+			Convey("Check stats", func() {
+				Convey("OK", func() {
+					responce := new(http.Response)
+					body := "OK\nmin_client_build=%d\ncur_client_build=96\nserver_time=%d\n"
+					body = fmt.Sprintf(body, clientBuild, time.Now().Unix())
+					responce.StatusCode = http.StatusOK
+					responce.Body = ioutil.NopCloser(bytes.NewBufferString(body))
+					c.httpClient = testClient{nil, responce, nil}
+					err := c.CheckStats()
+					So(err, ShouldBeNil)
 				})
 			})
 			Convey("Start", func() {
