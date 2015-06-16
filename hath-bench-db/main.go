@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -29,6 +30,7 @@ var (
 	bulkSize   int64
 	onlyOpen   bool
 	onlyMemory bool
+	onlyArray  bool
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
@@ -43,6 +45,7 @@ func init() {
 	flag.BoolVar(&collect, "collect", true, "collect old files")
 	flag.BoolVar(&onlyOpen, "only-open", false, "only open db")
 	flag.BoolVar(&onlyMemory, "only-memory", false, "only load to memory")
+	flag.BoolVar(&onlyMemory, "only-array", false, "only array of hashes")
 	flag.StringVar(&dbpath, "dbfile", "db.bolt", "working directory")
 	flag.IntVar(&cpus, "cpus", runtime.GOMAXPROCS(0), "cpu to use")
 }
@@ -80,6 +83,8 @@ func main() {
 		start := time.Now()
 		log.Println("iterating...")
 		var count int
+
+		fileBytes := len(g.NewFake().Bytes())
 		for _, f := range files {
 			if f.Static {
 				count++
@@ -91,7 +96,67 @@ func main() {
 		fmt.Println("static", count)
 		fmt.Printf("OK for %v at rate %f per second\n", duration, rate)
 		log.Println("iterated")
+
+		log.Println("Writing dump")
+		start = time.Now()
+		d, err := os.Create("dump.mem")
+		if err != nil {
+			log.Fatal(err)
+		}
+		var totalSize int
+		for _, f := range files {
+			n, err := d.Write(f.Bytes())
+			if err != nil {
+				log.Fatal(err)
+			}
+			totalSize += n
+		}
+		d.Close()
+		end = time.Now()
+		duration = end.Sub(start)
+		rate = float64(len(files)) / duration.Seconds()
+		fmt.Println("static", count)
+		fmt.Printf("OK for %v at rate %f per second\n", duration, rate)
+		log.Println("written", totalSize)
+		log.Println("reading dump")
+		d, err = os.Open("dump.mem")
+		defer d.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		var buffer = make([]byte, fileBytes)
+		var f hath.File
+		start = time.Now()
+		for {
+			_, err := d.Read(buffer)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err = hath.UnmarshalFileTo(buffer, &f); err != nil {
+				log.Fatal(err)
+			}
+		}
+		end = time.Now()
+		duration = end.Sub(start)
+		rate = float64(len(files)) / duration.Seconds()
+		fmt.Println("static", count)
+		fmt.Printf("OK for %v at rate %f per second\n", duration, rate)
+		log.Println("read")
 		os.Exit(0)
+	}
+	if onlyArray {
+		log.Println("allocating")
+		var ids = make([][hath.HashSize]byte, count)
+		log.Println("allocated")
+		var f hath.File
+		for i := range ids {
+			f = g.NewFake()
+			ids[i] = f.Hash
+		}
+
 	}
 	db, err := hath.NewDB(dbpath)
 	defer db.Close()
@@ -107,6 +172,7 @@ func main() {
 	if onlyOpen {
 		log.Println("only open. Waiting for 10s")
 		count = int64(db.Count())
+		fmt.Scanln()
 		start := time.Now()
 		n, err := db.GetOldFilesCount(time.Now().Add(time.Second * -10))
 		if err != nil {
@@ -117,7 +183,7 @@ func main() {
 		duration := end.Sub(start)
 		rate := float64(count) / duration.Seconds()
 		log.Printf("Scanned %d for %v at rate %f per second\n", count, duration, rate)
-		time.Sleep(10 * time.Second)
+		fmt.Scanln()
 	}
 	if generate {
 		log.Println("generating", count, "files")
