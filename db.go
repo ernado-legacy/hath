@@ -29,6 +29,8 @@ type DataBase interface {
 	RemoveBatch(f []File) error
 	Close() error
 	Count() int
+	GetOldFiles(maxCount int, deadline time.Time) (files []File, err error)
+	GetOldFilesCount(deadline time.Time) (count int64, err error)
 }
 
 // BoltDB stores info about files in cache

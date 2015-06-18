@@ -41,6 +41,14 @@ const (
 	actionStatistics   = "server_stat"
 	actionSettings     = "client_settings"
 	actionRemove       = "file_uncache"
+	actionSuspend      = "client_suspend"
+	actionResume       = "client_resume"
+	actionStop         = "client_stop"
+	actionMoreFiles    = "more_files"
+	actionOverload     = "overload"
+	actionFileDownload = "download_list"
+	actionFileAdd      = "file_register"
+	actionFileRemove   = "file_uncache"
 
 	settingStaticRanges = "static_ranges"
 
@@ -51,6 +59,7 @@ const (
 	responseFailOtherClientConnected = "FAIL_OTHER_CLIENT_CONNECTED"
 
 	maximumTimeLag = 10
+	maxRemoveCount = 50
 
 	httpGET           = "GET"
 	intBase           = 10
@@ -253,7 +262,31 @@ func (c Client) Start() error {
 
 // StillAlive sends heartbeat
 func (c Client) StillAlive() error {
-	r, err := c.getResponse(actionStillAlive)
+	return c.notify(actionStillAlive)
+}
+
+// Suspend server
+func (c Client) Suspend() error {
+	return c.notify(actionSuspend)
+}
+
+// Resume server
+func (c Client) Resume() error {
+	return c.notify(actionResume)
+}
+
+// Close server
+func (c Client) Close() error {
+	return c.notify(actionStop)
+}
+
+// More files
+func (c Client) More() error {
+	return c.notify(actionMoreFiles)
+}
+
+func (c Client) notify(action string) error {
+	r, err := c.getResponse(action)
 	if err != nil {
 		return err
 	}
@@ -428,6 +461,18 @@ func (c Client) GetFile(u *url.URL) (rc io.ReadCloser, err error) {
 
 // RemoveFiles notifies api server of removed files
 func (c Client) RemoveFiles(files []File) error {
+	count := len(files)
+	if count > maxRemoveCount {
+		// removing files in batches of maxRemoveCount
+		var index int
+		for index = 0; index < count; index += maxRemoveCount {
+			if err := c.RemoveFiles(files[index : index+maxRemoveCount]); err != nil {
+				return err
+			}
+		}
+		// removing reamaning files
+		files = files[index:]
+	}
 	idList := make([]string, len(files))
 	for i, f := range files {
 		idList[i] = f.String()
@@ -438,7 +483,7 @@ func (c Client) RemoveFiles(files []File) error {
 		return err
 	}
 	if !r.Success {
-		return ErrUnexpected{Response: r}
+		return ErrUnexpected{Response: r, Err: errors.New("not succeed")}
 	}
 	return nil
 }
