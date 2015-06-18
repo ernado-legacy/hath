@@ -48,6 +48,8 @@ func TestServer(t *testing.T) {
 			Dir:           testDir,
 		}
 		server := NewServer(cfg)
+		server.Start()
+		defer server.Close()
 		server.e.Use(mw.Logger())
 		server.e.Use(mw.Recover())
 		So(server, ShouldNotBeNil)
@@ -117,6 +119,7 @@ func TestServer(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(bytes.Equal(hash.Sum(nil), f.ByteID()), ShouldBeTrue)
 			Convey("DB must be consistent now", func() {
+				time.Sleep(time.Millisecond * 5)
 				f2, err := db.Get(f.ByteID())
 				So(err, ShouldBeNil)
 				So(f2.String(), ShouldEqual, f.String())

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo"
@@ -27,6 +28,9 @@ type DefaultServer struct {
 	frontend Frontend
 	db       DataBase
 	e        *echo.Echo
+	useQuery chan File
+	wg       *sync.WaitGroup
+	started  bool
 }
 
 const (
@@ -34,6 +38,7 @@ const (
 	argsEqual         = "="
 	argsKeystamp      = "keystamp"
 	timestampMaxDelta = 60
+	useQuerySize      = 100
 )
 
 // ProxyMode sets proxy security politics
@@ -150,17 +155,45 @@ func (s *DefaultServer) handleImage(c *echo.Context) error {
 	if expectedKeyStamp != keyStamp {
 		return c.HTML(http.StatusForbidden, "403: bad keystamp")
 	}
-	if err := s.db.Use(f); err != nil {
-		log.Printf("db miss for %s, writing to database\n", f.HexID())
-		if err := s.db.Add(f); err != nil {
-			return c.HTML(http.StatusInternalServerError, "500: unable to process request")
-		}
-	}
+	s.useQuery <- f
 	return s.frontend.Handle(f, c.Response().Writer())
 }
 
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.e.ServeHTTP(w, r)
+}
+
+// lastUsage update loop
+func (s *DefaultServer) useLoop() {
+	defer s.wg.Done()
+	for f := range s.useQuery {
+		if err := s.db.Use(f); err != nil {
+			log.Printf("db miss for %s, writing to database\n", f.HexID())
+			if err := s.db.Add(f); err != nil {
+				log.Println("db error while adding file", f)
+			}
+		}
+	}
+}
+
+// Start server internal goroutines
+func (s *DefaultServer) Start() error {
+	// starting lastUsage update loop
+	s.wg.Add(1)
+	go s.useLoop()
+
+	s.started = true
+	return nil
+}
+
+// Close stops server
+func (s *DefaultServer) Close() error {
+	close(s.useQuery)
+	s.db.Close()
+	s.wg.Wait()
+
+	s.started = false
+	return nil
 }
 
 // ServerConfig cfg for server
@@ -179,5 +212,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e := echo.New()
 	e.Get("/h/:fileid/:kwds/:filename", s.handleImage)
 	s.e = e
+	s.useQuery = make(chan File, useQuerySize)
+	s.wg = new(sync.WaitGroup)
 	return s
 }
