@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -39,6 +40,7 @@ const (
 	actionStillAlive   = "still_alive"
 	actionStatistics   = "server_stat"
 	actionSettings     = "client_settings"
+	actionRemove       = "file_uncache"
 
 	settingStaticRanges = "static_ranges"
 
@@ -53,6 +55,7 @@ const (
 	httpGET           = "GET"
 	intBase           = 10
 	keyStampDelimiter = "-"
+	fileIDDelimiter   = ";"
 )
 
 var (
@@ -409,6 +412,35 @@ func (c Client) Settings() (cfg Settings, err error) {
 	cfg.Name = vars.Get("name")
 	cfg.ProxyMode, err = vars.GetProxyMode("request_proxy_mode")
 	return cfg, err
+}
+
+// GetFile returns io.ReadCloser for given url
+func (c Client) GetFile(u *url.URL) (rc io.ReadCloser, err error) {
+	res, err := c.httpClient.Get(u.String())
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, ErrUnexpected{Err: errors.New("Unexpected status")}
+	}
+	return res.Body, nil
+}
+
+// RemoveFiles notifies api server of removed files
+func (c Client) RemoveFiles(files []File) error {
+	idList := make([]string, len(files))
+	for i, f := range files {
+		idList[i] = f.String()
+	}
+	arg := strings.Join(idList, fileIDDelimiter)
+	r, err := c.getResponse(actionRemove, arg)
+	if err != nil {
+		return err
+	}
+	if !r.Success {
+		return ErrUnexpected{Response: r}
+	}
+	return nil
 }
 
 // NewClient creates new client for api

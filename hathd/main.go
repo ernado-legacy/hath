@@ -21,10 +21,12 @@ var (
 	dir             string
 	clientKey       string
 	credentialsPath string
+	debug           bool
 )
 
 func init() {
 	flag.Int64Var(&clientID, "client-id", 0, "Hentai@Home client id")
+	flag.BoolVar(&debug, "debug", false, "enable debug")
 	flag.StringVar(&clientKey, "client-key", "", "Hentai@Home client key")
 	flag.StringVar(&dir, "dir", "hath", "working directory")
 	flag.StringVar(&credentialsPath, "cfg", "cfg.toml", "Path to credentials")
@@ -54,6 +56,10 @@ func main() {
 	cfg.Credentials = credentials
 	cfg.Frontend = frontend
 	cfg.DataBase = db
+	if debug {
+		cfg.DontCheckTimestamps = true
+		cfg.DontCheckSHA1 = true
+	}
 	s := hath.NewServer(cfg)
 	clientCfg := hath.ClientConfig{}
 	clientCfg.Credentials = credentials
@@ -61,11 +67,12 @@ func main() {
 	if err := c.CheckStats(); err != nil {
 		log.Fatal("check stats:", err)
 	}
-	if _, err := c.Settings(); err != nil {
+	settings, err := c.Settings()
+	if err != nil {
 		log.Fatal(err)
 	}
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
-	log.Fatal(http.ListenAndServe(":5569", s))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", settings.Port), s))
 }

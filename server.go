@@ -2,14 +2,18 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/labstack/echo"
+	"github.com/gin-gonic/gin"
 )
 
 // Server should handle requests from users (and rpc?)
@@ -22,15 +26,24 @@ type Server interface {
 	http.Handler
 }
 
+type speedTest struct{}
+
+func (s speedTest) Read(b []byte) (n int, err error) {
+	n = len(b)
+	return n, err
+}
+
 // DefaultServer uses hard drive to respond
 type DefaultServer struct {
+	api      *Client
 	cfg      ServerConfig
 	frontend Frontend
 	db       DataBase
-	e        *echo.Echo
+	e        *gin.Engine
 	useQuery chan File
 	wg       *sync.WaitGroup
 	started  bool
+	commands map[string]commandHandler
 }
 
 const (
@@ -39,6 +52,10 @@ const (
 	argsKeystamp      = "keystamp"
 	timestampMaxDelta = 60
 	useQuerySize      = 100
+	tmpFolder         = "tmp"
+	cmdKeyStart       = "hentai@home-servercmd"
+	cmdKeyDelimiter   = "-"
+	size100MB         = 10 * size10MB
 )
 
 // ProxyMode sets proxy security politics
@@ -126,37 +143,112 @@ func ParseArgs(s string) (a Args) {
 }
 
 // handleImage /h/<fileid>/<additional:kwds>/<filename>
-func (s *DefaultServer) handleImage(c *echo.Context) error {
+func (s *DefaultServer) handleImage(c *gin.Context) {
 	fileID := c.Param("fileid")
 	args := ParseArgs(c.Param("kwds"))
 	// parsing timestamp and keystamp
 	stamps := strings.Split(args.Get(argsKeystamp), keyStampDelimiter)
 	if len(stamps) != 2 {
-		return c.HTML(http.StatusBadRequest, "400: Bad stamp format")
+		c.String(http.StatusBadRequest, "400: Bad stamp format")
+		return
 	}
-	currentTimestamp := time.Now().Unix()
-	timestamp, err := strconv.ParseInt(stamps[0], 10, 64)
+	timestamp, err := strconv.ParseInt(stamps[0], intBase, 64)
 	if err != nil {
-		return c.HTML(http.StatusBadRequest, "400: Bad timestamp")
+		c.String(http.StatusBadRequest, "400: Bad timestamp")
+		return
 	}
-	deltaTimestamp := currentTimestamp - timestamp
-	if deltaTimestamp < 0 {
-		deltaTimestamp *= -1
-	}
-	if deltaTimestamp > timestampMaxDelta {
-		return c.HTML(http.StatusBadRequest, "400: timestamp delta is too big")
+	if !s.isDeltaValid(stamps[0]) {
+		c.String(http.StatusBadRequest, "400: timestamp delta is too big")
+		return
 	}
 	keyStamp := stamps[1]
 	f, err := FileFromID(fileID)
 	if err != nil {
-		return c.HTML(http.StatusBadRequest, "400: bad file id")
+		c.String(http.StatusBadRequest, "400: bad file id")
+		return
 	}
 	expectedKeyStamp := f.KeyStamp(s.cfg.Key, timestamp)
-	if expectedKeyStamp != keyStamp {
-		return c.HTML(http.StatusForbidden, "403: bad keystamp")
+	if expectedKeyStamp != keyStamp && !s.cfg.DontCheckSHA1 {
+		c.String(http.StatusForbidden, "403: bad keystamp")
+		return
 	}
 	s.useQuery <- f
-	return s.frontend.Handle(f, c.Response().Writer())
+	s.frontend.Handle(f, c.Writer)
+}
+
+func getSHA1(sep string, args []string) string {
+	hasher := sha1.New()
+	toHash := strings.Join(args, sep)
+	h := hasher.Sum([]byte(toHash))
+	return hex.EncodeToString(h)
+}
+
+type commandHandler func(*gin.Context, Args)
+
+func (s *DefaultServer) isDeltaValid(ts string) bool {
+	if s.cfg.DontCheckTimestamps {
+		return true
+	}
+	timestamp, err := strconv.ParseInt(ts, intBase, 64)
+	if err != nil {
+		return false
+	}
+	delta := time.Now().Unix() - timestamp
+	if delta < 0 {
+		delta *= -1
+	}
+	return delta < maximumTimeLag
+}
+
+// /servercmd/<command>/<additional:kwds>/<timestamp:int>/<key>
+func (s *DefaultServer) handleCommand(c *gin.Context) {
+	// checking crypto sign
+	// parsing params
+	key := c.Param("key")
+	kwds := c.Param("kwds")
+	args := ParseArgs(kwds)
+	timestampS := c.Param("timestamp")
+	command := c.Param("command")
+	sClientID := strconv.FormatInt(s.cfg.ClientID, intBase)
+
+	// checkign timestamp delta
+	if !s.isDeltaValid(timestampS) {
+		c.String(http.StatusUnauthorized, "bad timestamp")
+		return
+	}
+
+	hashArgs := []string{
+		cmdKeyStart,
+		kwds,
+		sClientID,
+		timestampS,
+		s.cfg.Key,
+	}
+	keyCalculated := getSHA1(cmdKeyDelimiter, hashArgs)
+	if key != keyCalculated && !s.cfg.DontCheckSHA1 {
+		c.String(http.StatusUnauthorized, "bad sign")
+		return
+	}
+	handler, ok := s.commands[command]
+	if !ok {
+		// handler for command not found
+		c.String(http.StatusNotFound, "command not found")
+		return
+	}
+	handler(c, args)
+}
+
+func (s *DefaultServer) commandSpeedTest(c *gin.Context, args Args) {
+	size := args.GetInt64("testsize")
+	if size <= 0 || size > size100MB {
+		size = size100MB
+	}
+	c.Header("Content-Length", strconv.FormatInt(size, intBase))
+	reader := speedTest{}
+	_, err := io.CopyN(c.Writer, reader, size)
+	if err != nil {
+		log.Println("speed test error", err)
+	}
 }
 
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +266,15 @@ func (s *DefaultServer) useLoop() {
 			}
 		}
 	}
+}
+
+func (s *DefaultServer) addFromURL(f File, u *url.URL) error {
+	rc, err := s.api.GetFile(u)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	return s.frontend.Add(f, rc)
 }
 
 // Start server internal goroutines
@@ -199,8 +300,11 @@ func (s *DefaultServer) Close() error {
 // ServerConfig cfg for server
 type ServerConfig struct {
 	Credentials
-	Frontend Frontend
-	DataBase DataBase
+	Frontend            Frontend
+	DataBase            DataBase
+	Client              *Client
+	DontCheckTimestamps bool
+	DontCheckSHA1       bool
 }
 
 // NewServer cleares default server with provided client and frontend
@@ -209,10 +313,31 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	s.cfg = cfg
 	s.db = cfg.DataBase
 	s.frontend = cfg.Frontend
-	e := echo.New()
-	e.Get("/h/:fileid/:kwds/:filename", s.handleImage)
+
+	// routing init
+	e := gin.New()
+	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
+	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
+
+	// routing for commands
+	commands := make(map[string]commandHandler)
+	commands["speed_test"] = s.commandSpeedTest
+	s.commands = commands
+
+	if cfg.DontCheckTimestamps {
+		log.Println("warning: not checking timestamps")
+	}
+
+	if cfg.DontCheckSHA1 {
+		log.Println("warning: not checking sha1")
+	}
+
 	s.e = e
 	s.useQuery = make(chan File, useQuerySize)
 	s.wg = new(sync.WaitGroup)
+	if cfg.Client == nil {
+		cfg.Client = NewClient(ClientConfig{Credentials: cfg.Credentials})
+	}
+	s.api = cfg.Client
 	return s
 }

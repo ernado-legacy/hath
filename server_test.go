@@ -14,8 +14,7 @@ import (
 	"testing"
 	"time"
 
-	mw "github.com/labstack/echo/middleware"
-
+	"github.com/gin-gonic/gin"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -50,8 +49,7 @@ func TestServer(t *testing.T) {
 		server := NewServer(cfg)
 		server.Start()
 		defer server.Close()
-		server.e.Use(mw.Logger())
-		server.e.Use(mw.Recover())
+		gin.SetMode(gin.TestMode)
 		So(server, ShouldNotBeNil)
 		s := httptest.NewServer(server)
 		defer s.Close()
