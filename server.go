@@ -4,6 +4,7 @@ package hath // import "cydev.ru/hath"
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -202,6 +203,11 @@ func (s *DefaultServer) isDeltaValid(ts string) bool {
 	return delta < maximumTimeLag
 }
 
+var (
+	// ErrNoFilesToRemove is flag that there is 0 files to remove
+	ErrNoFilesToRemove = errors.New("No more unused files")
+)
+
 func (s *DefaultServer) removeUnused(deadline time.Time) error {
 
 	files, err := s.db.GetOldFiles(maxRemoveCount, deadline)
@@ -223,6 +229,25 @@ func (s *DefaultServer) removeUnused(deadline time.Time) error {
 	return nil
 }
 
+func (s *DefaultServer) removeAllUnused(deadline time.Time) error {
+	log.Println("removing old files")
+	defer log.Println("removing old files completed")
+	for {
+		err := s.removeUnused(deadline)
+		// just iterating until error occurs
+		if err == nil {
+			continue
+		}
+		// error occured
+		// unexpected error check
+		if err != ErrNoFilesToRemove {
+			return err
+		}
+		// breaking inner loop
+		return nil
+	}
+}
+
 func (s *DefaultServer) removeLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -237,6 +262,9 @@ func (s *DefaultServer) removeLoop() {
 			}
 			if count == 0 {
 				continue
+			}
+			if err := s.removeAllUnused(deadline); err != nil {
+				log.Println("error while removing files", err)
 			}
 		case _ = <-s.stop:
 			return
