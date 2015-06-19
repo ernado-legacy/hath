@@ -27,18 +27,21 @@ func TestDBCollect(t *testing.T) {
 		So(db, ShouldNotBeNil)
 		var files []File
 		count := 50
+		var size int64
 		deadline := time.Now().Add(-4 * time.Second)
 		lastUsage := time.Now().Add(-time.Second)
 		for i := 0; i < count; i++ {
 			f := g.NewFake()
 			f.LastUsage = lastUsage.Unix()
 			files = append(files, f)
+			size += f.Size
 		}
 		lastUsage = time.Now().Add(-5 * time.Second)
 		for i := 0; i < count; i++ {
 			f := g.NewFake()
 			f.LastUsage = lastUsage.Unix()
 			files = append(files, f)
+			size += f.Size
 		}
 		Convey("Insert", func() {
 			So(db.AddBatch(files), ShouldBeNil)
@@ -46,6 +49,11 @@ func TestDBCollect(t *testing.T) {
 				n, err := db.GetOldFilesCount(deadline)
 				So(err, ShouldBeNil)
 				So(n, ShouldEqual, count)
+			})
+			Convey("Size", func() {
+				n, err := db.Size()
+				So(err, ShouldBeNil)
+				So(n, ShouldEqual, size)
 			})
 			files, err := db.GetOldFiles(count*2, deadline)
 			So(err, ShouldBeNil)

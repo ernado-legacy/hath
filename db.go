@@ -32,6 +32,7 @@ type DataBase interface {
 	Count() int
 	GetOldFiles(maxCount int, deadline time.Time) (files []File, err error)
 	GetOldFilesCount(deadline time.Time) (count int64, err error)
+	Size() (int64, error)
 }
 
 // BoltDB stores info about files in cache
@@ -339,6 +340,22 @@ func (d BoltDB) GetOldFilesCount(deadline time.Time) (count int64, err error) {
 		return err
 	})
 	return count, err
+}
+
+// Size of all files in cache
+func (d BoltDB) Size() (sum int64, err error) {
+	err = d.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(dbFileBucket)
+		var f File
+		return bucket.ForEach(func(k []byte, v []byte) error {
+			if err = d.deserialize(k, v, &f); err != nil {
+				return err
+			}
+			sum += f.Size
+			return nil
+		})
+	})
+	return sum, err
 }
 
 // Count is count of files in database
