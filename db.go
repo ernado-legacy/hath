@@ -25,6 +25,7 @@ type DataBase interface {
 	Add(f File) error
 	AddBatch(f []File) error
 	Use(f File) error
+	UseBatch(files []File) error
 	Remove(f File) error
 	RemoveBatch(f []File) error
 	Close() error
@@ -213,6 +214,40 @@ func (d BoltDB) Use(f File) error {
 		return err
 	}
 
+	return tx.Commit()
+}
+
+// UseBatch updates lastUsage for list of files
+func (d BoltDB) UseBatch(files []File) error {
+	lastUsage := time.Now().Unix()
+	tx, err := d.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	fileBucket := tx.Bucket(dbFileBucket)
+	indexBucket := tx.Bucket(dbTimeIndexBucket)
+
+	for _, f := range files {
+		// getting file from database
+		// for consistency
+		f, err = d.Get(f.ByteID())
+		if err != nil {
+			return err
+		}
+
+		if err := indexBucket.Delete(f.indexKey()); err != nil {
+			return err
+		}
+		f.LastUsage = lastUsage
+		if err := indexBucket.Put(f.indexKey(), nil); err != nil {
+			return err
+		}
+		if err := fileBucket.Put(f.ByteID(), d.serialize(f)); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 

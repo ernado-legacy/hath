@@ -36,16 +36,17 @@ func (s speedTest) Read(b []byte) (n int, err error) {
 
 // DefaultServer uses hard drive to respond
 type DefaultServer struct {
-	api      *Client
-	cfg      ServerConfig
-	frontend Frontend
-	db       DataBase
-	e        *gin.Engine
-	useQuery chan File
-	wg       *sync.WaitGroup
-	started  bool
-	commands map[string]commandHandler
-	stop     chan bool
+	api        *Client
+	cfg        ServerConfig
+	frontend   Frontend
+	db         DataBase
+	e          *gin.Engine
+	useQuery   chan File
+	wg         *sync.WaitGroup
+	started    bool
+	commands   map[string]commandHandler
+	stop       chan bool
+	updateLock sync.Locker
 }
 
 const (
@@ -263,6 +264,8 @@ func (s *DefaultServer) removeLoop() {
 			if count == 0 {
 				continue
 			}
+			s.updateLock.Lock()
+			defer s.updateLock.Unlock()
 			if err := s.removeAllUnused(deadline); err != nil {
 				log.Println("error while removing files", err)
 			}
@@ -329,12 +332,31 @@ func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // lastUsage update loop
 func (s *DefaultServer) useLoop() {
 	defer s.wg.Done()
-	for f := range s.useQuery {
-		if err := s.db.Use(f); err != nil {
-			log.Printf("db miss for %s, writing to database\n", f.HexID())
-			if err := s.db.Add(f); err != nil {
-				log.Println("db error while adding file", f)
-			}
+	ticker := time.NewTicker(s.cfg.UpdateRate)
+	defer ticker.Stop()
+
+	var files []File
+	update := func() {
+		if files == nil {
+			return
+		}
+		s.updateLock.Lock()
+		defer s.updateLock.Unlock()
+		if err := s.db.UseBatch(files); err != nil {
+			log.Println("error while updating lastUsage", err)
+		}
+		files = nil
+	}
+	// we need to update last files before stopping server
+	defer update()
+	for {
+		select {
+		case f := <-s.useQuery:
+			files = append(files, f)
+		case <-ticker.C:
+			update()
+		case <-s.stop:
+			return
 		}
 	}
 }
@@ -390,6 +412,7 @@ type ServerConfig struct {
 	DontCheckSHA1       bool
 	RemoveTimeout       time.Duration
 	RemoveRate          time.Duration
+	UpdateRate          time.Duration
 }
 
 // PopulateDefaults of the config
@@ -402,6 +425,9 @@ func (cfg *ServerConfig) PopulateDefaults() {
 	}
 	if cfg.Client == nil {
 		cfg.Client = NewClient(ClientConfig{Credentials: cfg.Credentials})
+	}
+	if cfg.UpdateRate == time.Second*0 {
+		cfg.UpdateRate = time.Second * 5
 	}
 }
 
@@ -436,5 +462,6 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	s.wg = new(sync.WaitGroup)
 	s.api = cfg.Client
 	s.stop = make(chan bool)
+	s.updateLock = new(sync.Mutex)
 	return s
 }
