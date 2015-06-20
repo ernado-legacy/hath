@@ -171,6 +171,21 @@ func ParseArgs(s string) (a Args) {
 	return a
 }
 
+func hashStrings(args ...string) string {
+	hasher := sha1.New()
+	for _, s := range args {
+		fmt.Fprint(hasher, s)
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+func (s *DefaultServer) proxyPasskey(f File) string {
+	size := 10
+	// sha(id + "I think we can put our differences behind us." + sha(key + "For science.")[:10] + "You monster")[:10]
+	keyHash := hashStrings(s.cfg.Key, "For science.")[:size]
+	return hashStrings(f.String(), "I think we can put our differences behind us.", keyHash, "You monster.")[:size]
+}
+
 // handleProxy /p/fileid=asdf;token=asdf;gid=123;page=321;passkey=asdf/filename
 func (s *DefaultServer) handleProxy(c *gin.Context) {
 	mode := s.cfg.Settings.ProxyMode
@@ -199,8 +214,8 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 
 	if mode == ProxyLocalNetworksProtected || mode == ProxyAllNetworksProtected {
 		// checking passkey
-		log.Println("proxy:", "warning:", "passkey check is not implemented")
-		if passkey != "" {
+		if passkey != s.proxyPasskey(f) {
+			log.Println("proxy:", "bad passkey provided")
 			c.String(http.StatusForbidden, "bad passkey")
 			return
 		}
