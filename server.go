@@ -756,6 +756,9 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
 	e.GET("/p/:kwds/:filename", s.handleProxy)
+	e.GET("/favicon.ico", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "http://g.e-hentai.org/favicon.ico")
+	})
 
 	// routing for commands
 	s.commands = map[string]commandHandler{
