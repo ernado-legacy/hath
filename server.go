@@ -2,12 +2,14 @@
 package hath // import "cydev.ru/hath"
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -73,6 +75,16 @@ const (
 
 	cmdSpeedTest = "speed_test"
 	cmdDownload  = "cache_files"
+	cmdProxyTest = "proxy_test"
+
+	argIP        = "ipaddr"
+	argPort      = "port"
+	argFileID    = "fileid"
+	argKeystamp  = "keystamp"
+	argTestSize  = "testsize"
+	argTestCount = "testcount"
+	argTestTime  = "testtime"
+	argTestKey   = "testkey"
 )
 
 // ProxyMode sets proxy security politics
@@ -327,7 +339,7 @@ func (s *DefaultServer) handleCommand(c *gin.Context) {
 }
 
 func (s *DefaultServer) commandSpeedTest(c *gin.Context, args Args) {
-	size := args.GetInt64("testsize")
+	size := args.GetInt64(argTestSize)
 	if size <= 0 || size > size100MB {
 		size = size100MB
 	}
@@ -351,7 +363,7 @@ func (s *DefaultServer) commandDownload(c *gin.Context, args Args) {
 		host := elems[1]
 
 		writeStatus := func(status string) {
-			fmt.Fprintf(c.Writer, "%s:%s\n", status, fileID)
+			fmt.Fprintf(c.Writer, "%s:%s\n", fileID, status)
 		}
 
 		// parsing and validating fileID
@@ -378,6 +390,83 @@ func (s *DefaultServer) commandDownload(c *gin.Context, args Args) {
 		}
 		writeStatus(downloadSuccess)
 	}
+}
+
+// commandProxyTest processes speed-test requests for other hath clients
+// golang implementation differs from original java in way of
+// removing unreliable attemps of reducing RTT impact
+// with minimum side-effects and simple as fock
+func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
+	// parsing arguments
+	ip := net.ParseIP(args.Get(argIP))
+	port := args.GetInt(argPort)
+	fileID := args.Get(argFileID)
+	keystamp := args.Get(argKeystamp)
+
+	// writeStatus writes fileID:status-duration to responce body
+	writeStatus := func(status string, t float64) {
+		fmt.Fprintf(c.Writer, "%s:%s-%f\n", fileID, status, t)
+	}
+
+	f, err := FileFromID(fileID)
+	if err != nil || f.Size > FileMaximumSize {
+		writeStatus(downloadInvalid, 0)
+		return
+	}
+	// generating url
+	u := new(url.URL)
+	u.Scheme = downloadScheme
+	u.Host = ip.String()
+	u.Path = fmt.Sprintf("/h/%s/keystamp=%s/test.jpg", fileID, keystamp)
+	log.Printf("proxy: testing %s:%d", ip, port)
+
+	// creating tmp file
+	buff := new(bytes.Buffer)
+	if err != nil {
+		writeStatus(downloadError, 0)
+		return
+	}
+
+	// starting request
+	rc, err := s.api.GetFile(u)
+	if err != nil {
+		writeStatus(downloadError, 0)
+		return
+	}
+	// on this stage we already got all headers parsed
+	// and ready to read body
+	// thats how we remove TTFB impact
+	defer rc.Close()
+
+	// connected; tcp handshake succeed, headers parsed;
+	start := time.Now()
+	// downloading to in-memory buffer
+	// because we limit maximum size of the file by fairly low (10mb by default)
+	// see FileMaximumSize for exact value
+	// thats how we remove HDD impact
+	n, err := io.CopyN(buff, rc, f.Size)
+	if err != nil || n != f.Size {
+		log.Println("proxy: failed to download", err)
+		writeStatus(downloadError, 0)
+		return
+	}
+	// Measured pure download duration, that does not include
+	// time to first byte, header parsing, sha1 checksum calculation,
+	// db interactions, possible frontend speed degrades, etc.
+	// There is no sense to calculate possible RTT impact here
+	duration := time.Now().Sub(start)
+	if err := s.frontend.Add(f, buff); err != nil {
+		// possible sha1 checksum fail
+		log.Println("proxy: failed to add to frontend", err)
+		writeStatus(downloadError, 0)
+		return
+	}
+	if err := s.db.Add(f); err != nil {
+		// non proxy-related issue
+		log.Println("proxy: unable to add to db", err)
+		// todo: recover
+	}
+	writeStatus(downloadSuccess, duration.Seconds())
 }
 
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -503,6 +592,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	s.commands = map[string]commandHandler{
 		cmdSpeedTest: s.commandSpeedTest,
 		cmdDownload:  s.commandDownload,
+		cmdProxyTest: s.commandProxyTest,
 	}
 
 	if cfg.DontCheckTimestamps {
