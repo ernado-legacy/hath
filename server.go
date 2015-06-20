@@ -403,7 +403,7 @@ func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
 	fileID := args.Get(argFileID)
 	keystamp := args.Get(argKeystamp)
 
-	// writeStatus writes fileID:status-duration to responce body
+	// writeStatus writes fileID:status-duration to response body
 	writeStatus := func(status string, t float64) {
 		fmt.Fprintf(c.Writer, "%s:%s-%f\n", fileID, status, t)
 	}
@@ -452,7 +452,7 @@ func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
 	}
 	// Measured pure download duration, that does not include
 	// time to first byte, header parsing, sha1 checksum calculation,
-	// db interactions, possible frontend speed degrades, etc.
+	// db interactions, possible frontend speed degradation, etc.
 	// There is no sense to calculate possible RTT impact here
 	duration := time.Now().Sub(start)
 	if err := s.frontend.Add(f, buff); err != nil {
