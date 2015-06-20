@@ -301,7 +301,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 			u.RawQuery = q.Encode()
 		}
 
-		log.Println("proxy:", "downloading", f, "from", u.Host)
+		log.Println("proxy:", "downloading", f)
 
 		rc, err := s.api.GetFile(u)
 		if err != nil {
@@ -321,14 +321,10 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 		}
 		// async saving file to db/frontend
 		go func() {
-			log.Println("proxy:", "saving file to cache/db")
 			defer buff.Reset()
-			if err := s.frontend.Add(f, buff); err != nil {
-				log.Println("failed to add file", f, err)
-				return
-			}
-			if err := s.db.Add(f); err != nil {
-				log.Println("DB ERRROR:", f, err)
+			log.Println("proxy:", "saving file to cache/db")
+			if err := s.addFile(f, buff); err != nil {
+				log.Println("proxy:", "add failed", err)
 				return
 			}
 			log.Println("proxy:", "cached", f)
@@ -627,16 +623,11 @@ func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
 	// db interactions, possible frontend speed degradation, etc.
 	// There is no sense to calculate possible RTT impact here
 	duration := time.Now().Sub(start)
-	if err := s.frontend.Add(f, buff); err != nil {
+	if err := s.addFile(f, buff); err != nil {
 		// possible sha1 checksum fail
-		log.Println("proxy: failed to add to frontend", err)
+		log.Println("proxy: failed to add  file", err)
 		writeStatus(downloadError, 0)
 		return
-	}
-	if err := s.db.Add(f); err != nil {
-		// non proxy-related issue
-		log.Println("proxy: unable to add to db", err)
-		// todo: recover
 	}
 	writeStatus(downloadSuccess, duration.Seconds())
 }
@@ -683,7 +674,7 @@ func (s *DefaultServer) addFromURL(f File, u *url.URL) error {
 		return err
 	}
 	defer rc.Close()
-	return s.frontend.Add(f, rc)
+	return s.addFile(f, rc)
 }
 
 // Start server internal goroutines
