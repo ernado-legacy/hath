@@ -322,6 +322,11 @@ func (f *File) SetHash(s string) error {
 	return nil
 }
 
+// Buffer creates buffer with size of file
+func (f *File) Buffer() *bytes.Buffer {
+	return bytes.NewBuffer(make([]byte, 0, f.Size))
+}
+
 // FileFromID generates new File from provided ID
 func FileFromID(fileid string) (f File, err error) {
 	elems := strings.Split(fileid, keyStampDelimiter)

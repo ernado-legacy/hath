@@ -2,7 +2,6 @@
 package hath // import "cydev.ru/hath"
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -310,7 +309,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 		}
 		defer rc.Close()
 
-		buff := new(bytes.Buffer)
+		buff := f.Buffer()
 		w := io.MultiWriter(buff, c.Writer)
 		// proxying data without buffering for speed-up
 		c.Writer.Header().Add(headerContentLength, sInt64(f.Size))
@@ -588,12 +587,8 @@ func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
 	u.Path = fmt.Sprintf("/h/%s/keystamp=%s/test.jpg", fileID, keystamp)
 	log.Printf("proxy: testing %s:%d", ip, port)
 
-	// creating tmp file
-	buff := new(bytes.Buffer)
-	if err != nil {
-		writeStatus(downloadError, 0)
-		return
-	}
+	// creating buffer for file
+	buff := f.Buffer()
 
 	// starting request
 	rc, err := s.api.GetFile(u)
