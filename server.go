@@ -171,6 +171,76 @@ func ParseArgs(s string) (a Args) {
 	return a
 }
 
+// handleProxy /p/fileid=asdf;token=asdf;gid=123;page=321;passkey=asdf/filename
+func (s *DefaultServer) handleProxy(c *gin.Context) {
+	mode := s.cfg.Settings.ProxyMode
+	if mode == ProxyDisabled {
+		c.String(http.StatusForbidden, "proxy disabled")
+		return
+	}
+	args := ParseArgs(c.Param("kwds"))
+	fileID := args.Get("fileID")
+	f, err := FileFromID(fileID)
+	if err != nil {
+		c.String(http.StatusBadRequest, "400: bad file id")
+		return
+	}
+	galleryID := args.GetInt("gid")
+	page := args.GetInt("page")
+	passkey := args.Get("passkey")
+	token := args.Get("token")
+	filename := c.Param("filename")
+
+	if s.db.Exists(f) {
+		s.frontend.Handle(f, c.Writer)
+		return
+	}
+
+	if mode == ProxyLocalNetworksProtected || mode == ProxyAllNetworksProtected {
+		// checking passkey
+		log.Println("proxy:", "warning:", "passkey check is not implemented")
+		if passkey != "" {
+			c.String(http.StatusForbidden, "bad passkey")
+			return
+		}
+	}
+
+	u := new(url.URL)
+	u.Scheme = downloadScheme
+	u.Host = s.cfg.Settings.RequestServer
+	u.Path = fmt.Sprintf("/r/%s/%s/%d-%d/%s", fileID, token, galleryID, page, filename)
+
+	var downloadFromHathNetwork bool
+	for attempt := 1; attempt <= s.cfg.MaxDownloadAttemps; attempt++ {
+		downloadFromHathNetwork = attempt == s.cfg.MaxDownloadAttemps
+
+		// skip download from hath network
+		if !downloadFromHathNetwork {
+			log.Println("proxy: falling back to direct download")
+			q := make(url.Values)
+			q.Add("nl", "1") // so fucking obvious
+			u.RawQuery = q.Encode()
+		}
+
+		rc, err := s.api.GetFile(u)
+		if err != nil {
+			log.Println("proxy: download attempt failed", err)
+			continue
+		}
+		defer rc.Close()
+
+		// proxying data without buffering for speed-up
+		c.Writer.Header().Add(headerContentLength, sInt64(f.Size))
+		n, err := io.CopyN(c.Writer, rc, f.Size)
+		if err != nil || n != f.Size {
+			log.Println("proxy: failed", err)
+			return
+		}
+		break
+	}
+	log.Println("proxy:", "downloaded", f)
+}
+
 // handleImage /h/<fileid>/<additional:kwds>/<filename>
 func (s *DefaultServer) handleImage(c *gin.Context) {
 	fileID := c.Param("fileid")
@@ -557,6 +627,8 @@ type ServerConfig struct {
 	RemoveTimeout       time.Duration
 	RemoveRate          time.Duration
 	UpdateRate          time.Duration
+	MaxDownloadAttemps  int
+	Settings            Settings
 }
 
 // PopulateDefaults of the config
@@ -573,6 +645,9 @@ func (cfg *ServerConfig) PopulateDefaults() {
 	if cfg.UpdateRate == time.Second*0 {
 		cfg.UpdateRate = time.Second * 5
 	}
+	if cfg.MaxDownloadAttemps == 0 {
+		cfg.MaxDownloadAttemps = 4
+	}
 }
 
 // NewServer cleares default server with provided client and frontend
@@ -587,6 +662,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e := gin.New()
 	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
+	e.GET("/p/:kwds/:filename", s.handleProxy)
 
 	// routing for commands
 	s.commands = map[string]commandHandler{

@@ -403,7 +403,7 @@ func (c Client) CheckStats() error {
 type Settings struct {
 	RPCServers            []string
 	ImageServers          []string
-	RequestServers        []string
+	RequestServer         string
 	LowMemory             bool
 	ProxyMode             ProxyMode
 	StaticRanges          StaticRanges

@@ -33,6 +33,7 @@ type DataBase interface {
 	GetOldFiles(maxCount int, deadline time.Time) (files []File, err error)
 	GetOldFilesCount(deadline time.Time) (count int64, err error)
 	Size() (int64, error)
+	Exists(f File) bool
 }
 
 // BoltDB stores info about files in cache
@@ -365,6 +366,15 @@ func (d BoltDB) Count() (count int) {
 		return nil
 	})
 	return
+}
+
+// Exists return true if file exists in db
+func (d BoltDB) Exists(f File) (exists bool) {
+	d.db.View(func(tx *bolt.Tx) error {
+		exists = len(tx.Bucket(dbFileBucket).Get(f.ByteID())) != 0
+		return nil
+	})
+	return exists
 }
 
 // Get loads file from database

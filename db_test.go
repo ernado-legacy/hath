@@ -84,8 +84,10 @@ func TestDBInit(t *testing.T) {
 		Convey("Insert", func() {
 			rec := g.NewFake()
 			rec.LastUsage -= 20
+			So(db.Exists(rec), ShouldBeFalse)
 			err := db.Add(rec)
 			So(err, ShouldBeNil)
+			So(db.Exists(rec), ShouldBeTrue)
 			Convey("Get", func() {
 				f, err := db.Get(rec.ByteID())
 				So(err, ShouldBeNil)
