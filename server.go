@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -60,6 +61,18 @@ const (
 	cmdKeyDelimiter     = "-"
 	size100MB           = 10 * size10MB
 	headerContentLength = "Content-Length"
+	fileInfoDelimiter   = ":"
+
+	downloadError     = "FAIL"
+	downloadSuccess   = "OK"
+	downloadInvalid   = "INVALID"
+	downloadPath      = "image.php"
+	argDownloadFileID = "f"
+	argDownloadKey    = "t"
+	downloadScheme    = "http"
+
+	cmdSpeedTest = "speed_test"
+	cmdDownload  = "cache_files"
 )
 
 // ProxyMode sets proxy security politics
@@ -325,6 +338,48 @@ func (s *DefaultServer) commandSpeedTest(c *gin.Context, args Args) {
 	}
 }
 
+// commandDownload process request from server to download a list of files
+// and store them in database and cache
+func (s *DefaultServer) commandDownload(c *gin.Context, args Args) {
+	for fileInfo, key := range args {
+		elems := strings.Split(fileInfo, fileInfoDelimiter)
+		if len(elems) != 2 {
+			log.Println("warning:", "got bad file info string from server:", fileInfo)
+			continue
+		}
+		fileID := elems[0]
+		host := elems[1]
+
+		writeStatus := func(status string) {
+			fmt.Fprintf(c.Writer, "%s:%s\n", status, fileID)
+		}
+
+		// parsing and validating fileID
+		f, err := FileFromID(fileID)
+		if err != nil {
+			writeStatus(downloadInvalid)
+			continue
+		}
+
+		// generating url
+		u := new(url.URL)
+		u.Host = host
+		u.Scheme = downloadScheme
+		u.Path = downloadPath
+		q := make(url.Values)
+		q.Add(argDownloadFileID, fileID)
+		q.Add(argDownloadKey, key)
+		u.RawQuery = q.Encode()
+
+		// downloading and saving file to db/cache
+		if err := s.addFromURL(f, u); err != nil {
+			writeStatus(downloadError)
+			continue
+		}
+		writeStatus(downloadSuccess)
+	}
+}
+
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.e.ServeHTTP(w, r)
 }
@@ -445,9 +500,10 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
 
 	// routing for commands
-	commands := make(map[string]commandHandler)
-	commands["speed_test"] = s.commandSpeedTest
-	s.commands = commands
+	s.commands = map[string]commandHandler{
+		cmdSpeedTest: s.commandSpeedTest,
+		cmdDownload:  s.commandDownload,
+	}
 
 	if cfg.DontCheckTimestamps {
 		log.Println("warning: not checking timestamps")
