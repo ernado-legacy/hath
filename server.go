@@ -761,6 +761,10 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e.GET("/favicon.ico", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "http://g.e-hentai.org/favicon.ico")
 	})
+	e.GET("/robots.txt", func(c *gin.Context) {
+		c.Writer.Header().Add(headerContentType, "text/plain")
+		fmt.Fprintf(c.Writer, "User-agent: *\nDisallow: /")
+	})
 
 	// routing for commands
 	s.commands = map[string]commandHandler{
