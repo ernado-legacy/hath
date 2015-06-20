@@ -469,6 +469,13 @@ func (s *DefaultServer) removeLoop() {
 
 // /servercmd/<command>/<additional:kwds>/<timestamp:int>/<key>
 func (s *DefaultServer) handleCommand(c *gin.Context) {
+	// checking remote ip
+	if !s.cfg.Settings.IsRPCServer(c.Request) {
+		log.Println("server:", "got request from suspicous origin", c.Request.RemoteAddr)
+		c.String(http.StatusUnauthorized, "403: not authorised")
+		return
+	}
+
 	// checking crypto sign
 	// parsing params
 	key := c.Param("key")

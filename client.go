@@ -401,8 +401,8 @@ func (c Client) CheckStats() error {
 
 // Settings of hath client
 type Settings struct {
-	RPCServers            []string
-	ImageServers          []string
+	RPCServers            []net.IP
+	ImageServer           string
 	RequestServer         string
 	LowMemory             bool
 	ProxyMode             ProxyMode
@@ -415,6 +415,20 @@ type Settings struct {
 	DiskReamainingBytes   int64
 }
 
+// IsRPCServer returns true, if request is sent from hath rpc server
+func (s Settings) IsRPCServer(r *http.Request) bool {
+	remoteIP, err := FromRequest(r)
+	if err != nil {
+		return false
+	}
+	for _, ip := range s.RPCServers {
+		if ip.Equal(remoteIP) {
+			return true
+		}
+	}
+	return false
+}
+
 // Settings from server
 func (c Client) Settings() (cfg Settings, err error) {
 	r, err := c.getResponse(actionSettings)
@@ -425,9 +439,6 @@ func (c Client) Settings() (cfg Settings, err error) {
 		return cfg, ErrUnexpected{Response: r}
 	}
 	vars := r.ParseVars()
-	for k, v := range vars {
-		log.Println(k, "=", v)
-	}
 	cfg.StaticRanges, err = vars.GetStaticRange(settingStaticRanges)
 	if err != nil {
 		return cfg, err
@@ -452,6 +463,18 @@ func (c Client) Settings() (cfg Settings, err error) {
 	cfg.ProxyMode, err = vars.GetProxyMode("request_proxy_mode")
 
 	cfg.RequestServer = vars.Get("request_server")
+	cfg.ImageServer = vars.Get("image_server")
+
+	// parsing rpc servers
+	servers := strings.Split(vars.Get("rpc_server_ip"), ";")
+	for _, server := range servers {
+		ip := net.ParseIP(server)
+		if ip == nil {
+			return cfg, io.ErrUnexpectedEOF
+		}
+		cfg.RPCServers = append(cfg.RPCServers, ip)
+	}
+	fmt.Printf("%+v\n", cfg)
 	return cfg, err
 }
 
