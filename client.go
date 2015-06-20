@@ -464,6 +464,7 @@ func (c Client) GetFile(u *url.URL) (rc io.ReadCloser, err error) {
 	if res.StatusCode != http.StatusOK {
 		return nil, ErrUnexpected{Err: errors.New("Unexpected status")}
 	}
+	log.Println("client:", "downloading from", res.Request.URL.Host)
 	return res.Body, nil
 }
 
