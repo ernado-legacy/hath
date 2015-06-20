@@ -73,9 +73,10 @@ const (
 	argDownloadKey    = "t"
 	downloadScheme    = "http"
 
-	cmdSpeedTest = "speed_test"
-	cmdDownload  = "cache_files"
-	cmdProxyTest = "proxy_test"
+	cmdSpeedTest       = "speed_test"
+	cmdDownload        = "cache_files"
+	cmdProxyTest       = "proxy_test"
+	cmdRefreshSettings = "refresh_settings"
 
 	argIP        = "ipaddr"
 	argPort      = "port"
@@ -566,6 +567,20 @@ func (s *DefaultServer) commandDownload(c *gin.Context, args Args) {
 	}
 }
 
+// commandRefreshSettings precesses request to refresh settings
+func (s *DefaultServer) commandRefreshSettings(c *gin.Context, args Args) {
+	log.Println("server:", "refreshing settings")
+	settings, err := s.api.Settings()
+	if err != nil {
+		log.Println("server:", "failed to refresh settings", err)
+		c.String(http.StatusOK, "false")
+		return
+	}
+	c.String(http.StatusOK, "true")
+	s.cfg.Settings = settings
+	log.Println("server:", "refreshed settings")
+}
+
 // commandProxyTest processes speed-test requests for other hath clients
 // golang implementation differs from original java in way of
 // removing unreliable attemps of reducing RTT impact
@@ -755,6 +770,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 
 	// routing init
 	e := gin.New()
+	e.Use(gin.Recovery())
 	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
 	e.GET("/p/:kwds/:filename", s.handleProxy)
@@ -768,9 +784,10 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 
 	// routing for commands
 	s.commands = map[string]commandHandler{
-		cmdSpeedTest: s.commandSpeedTest,
-		cmdDownload:  s.commandDownload,
-		cmdProxyTest: s.commandProxyTest,
+		cmdSpeedTest:       s.commandSpeedTest,
+		cmdDownload:        s.commandDownload,
+		cmdProxyTest:       s.commandProxyTest,
+		cmdRefreshSettings: s.commandRefreshSettings,
 	}
 
 	if cfg.DontCheckTimestamps {
