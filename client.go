@@ -131,7 +131,7 @@ func IsUnexpected(err error) bool {
 }
 
 func (e ErrUnexpected) Error() string {
-	return fmt.Sprintf("Unexpected error %s: %v", e.Err, e.Response)
+	return fmt.Sprintf("Unexpected error %v: %v", e.Err, e.Response)
 }
 
 func sInt64(i int64) string {
@@ -187,21 +187,21 @@ func (c Client) ActionURL(args ...string) *url.URL {
 }
 
 func (c Client) getResponse(args ...string) (r APIResponse, err error) {
-	// start := time.Now()
+	start := time.Now()
 	u := c.ActionURL(args...)
 
 	// log request
-	// defer func() {
-	// 	end := time.Now().Sub(start)
-	// 	status := "OK"
-	// 	if err != nil {
-	// 		status = err.Error()
-	// 	}
-	// 	if !r.Success {
-	// 		status = "ERR"
-	// 	}
-	// 	log.Println(httpGET, u, end, status)
-	// }()
+	defer func() {
+		end := time.Now().Sub(start)
+		status := "OK"
+		if err != nil {
+			status = err.Error()
+		}
+		if !r.Success {
+			status = "ERR"
+		}
+		log.Println(httpGET, u, end, status)
+	}()
 
 	// perform request
 	res, err := c.httpClient.Get(u.String())
@@ -418,6 +418,12 @@ type Settings struct {
 // Settings from server
 func (c Client) Settings() (cfg Settings, err error) {
 	r, err := c.getResponse(actionSettings)
+	if err != nil {
+		return cfg, err
+	}
+	if !r.Success {
+		return cfg, ErrUnexpected{Response: r}
+	}
 	vars := r.ParseVars()
 	for k, v := range vars {
 		log.Println(k, "=", v)
@@ -444,6 +450,8 @@ func (c Client) Settings() (cfg Settings, err error) {
 
 	cfg.Name = vars.Get("name")
 	cfg.ProxyMode, err = vars.GetProxyMode("request_proxy_mode")
+
+	cfg.RequestServer = vars.Get("request_server")
 	return cfg, err
 }
 

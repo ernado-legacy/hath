@@ -60,7 +60,7 @@ func main() {
 		cfg.DontCheckTimestamps = true
 		cfg.DontCheckSHA1 = true
 	}
-	s := hath.NewServer(cfg)
+
 	clientCfg := hath.ClientConfig{}
 	clientCfg.Credentials = credentials
 	c := hath.NewClient(clientCfg)
@@ -71,6 +71,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	cfg.Settings = settings
+	s := hath.NewServer(cfg)
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()

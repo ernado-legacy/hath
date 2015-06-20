@@ -179,9 +179,10 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 		return
 	}
 	args := ParseArgs(c.Param("kwds"))
-	fileID := args.Get("fileID")
+	fileID := args.Get("fileid")
 	f, err := FileFromID(fileID)
 	if err != nil {
+		log.Println("proxy:", "bad file id", fileID, err)
 		c.String(http.StatusBadRequest, "400: bad file id")
 		return
 	}
@@ -211,8 +212,9 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 	u.Path = fmt.Sprintf("/r/%s/%s/%d-%d/%s", fileID, token, galleryID, page, filename)
 
 	var downloadFromHathNetwork bool
+	var downloaded bool
 	for attempt := 1; attempt <= s.cfg.MaxDownloadAttemps; attempt++ {
-		downloadFromHathNetwork = attempt == s.cfg.MaxDownloadAttemps
+		downloadFromHathNetwork = attempt != s.cfg.MaxDownloadAttemps
 
 		// skip download from hath network
 		if !downloadFromHathNetwork {
@@ -222,6 +224,8 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 			u.RawQuery = q.Encode()
 		}
 
+		log.Println("proxy:", "downloading", f, "from", u.Host)
+
 		rc, err := s.api.GetFile(u)
 		if err != nil {
 			log.Println("proxy: download attempt failed", err)
@@ -229,16 +233,37 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 		}
 		defer rc.Close()
 
+		buff := new(bytes.Buffer)
+		w := io.MultiWriter(buff, c.Writer)
 		// proxying data without buffering for speed-up
 		c.Writer.Header().Add(headerContentLength, sInt64(f.Size))
-		n, err := io.CopyN(c.Writer, rc, f.Size)
+		n, err := io.CopyN(w, rc, f.Size)
 		if err != nil || n != f.Size {
 			log.Println("proxy: failed", err)
 			return
 		}
+		// async saving file to db/frontend
+		go func() {
+			log.Println("proxy:", "saving file to cache/db")
+			defer buff.Reset()
+			if err := s.frontend.Add(f, buff); err != nil {
+				log.Println("failed to add file", f, err)
+				return
+			}
+			if err := s.db.Add(f); err != nil {
+				log.Println("DB ERRROR:", f, err)
+				return
+			}
+			log.Println("proxy:", "cached", f)
+		}()
+		downloaded = true
 		break
 	}
-	log.Println("proxy:", "downloaded", f)
+	if downloaded {
+		log.Println("proxy:", "downloaded", f)
+	} else {
+		log.Println("proxy:", "failed to download", f)
+	}
 }
 
 // handleImage /h/<fileid>/<additional:kwds>/<filename>
