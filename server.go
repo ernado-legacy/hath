@@ -77,6 +77,7 @@ const (
 	cmdDownload        = "cache_files"
 	cmdProxyTest       = "proxy_test"
 	cmdRefreshSettings = "refresh_settings"
+	cmdStillAlive      = "still_alive"
 
 	argIP        = "ipaddr"
 	argPort      = "port"
@@ -649,6 +650,11 @@ func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
 	writeStatus(downloadSuccess, duration.Seconds())
 }
 
+// commandStillAlive is heartbeat response
+func (s *DefaultServer) commandStillAlive(c *gin.Context, _ Args) {
+	c.String(http.StatusOK, "I feel FANTASTIC and I'm still alive")
+}
+
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.e.ServeHTTP(w, r)
 }
@@ -788,6 +794,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 		cmdDownload:        s.commandDownload,
 		cmdProxyTest:       s.commandProxyTest,
 		cmdRefreshSettings: s.commandRefreshSettings,
+		cmdStillAlive:      s.commandStillAlive,
 	}
 
 	if cfg.DontCheckTimestamps {
