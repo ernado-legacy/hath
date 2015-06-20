@@ -39,17 +39,18 @@ func (s speedTest) Read(b []byte) (n int, err error) {
 
 // DefaultServer uses hard drive to respond
 type DefaultServer struct {
-	api        *Client
-	cfg        ServerConfig
-	frontend   Frontend
-	db         DataBase
-	e          *gin.Engine
-	useQuery   chan File
-	wg         *sync.WaitGroup
-	started    bool
-	commands   map[string]commandHandler
-	stop       chan bool
-	updateLock sync.Locker
+	api           *Client
+	cfg           ServerConfig
+	frontend      Frontend
+	db            DataBase
+	e             *gin.Engine
+	useQuery      chan File
+	wg            *sync.WaitGroup
+	started       bool
+	commands      map[string]commandHandler
+	stop          chan bool
+	updateLock    sync.Locker
+	localNetworks []net.IPNet
 }
 
 const (
@@ -186,6 +187,45 @@ func (s *DefaultServer) proxyPasskey(f File) string {
 	return hashStrings(f.String(), "I think we can put our differences behind us.", keyHash, "You monster.")[:size]
 }
 
+// FromRequest extracts the user IP address from req, if present.
+func FromRequest(req *http.Request) (net.IP, error) {
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return nil, fmt.Errorf("userip: %q is not IP:port", req.RemoteAddr)
+	}
+
+	userIP := net.ParseIP(ip)
+	if userIP == nil {
+		return nil, fmt.Errorf("userip: %q is not IP:port", req.RemoteAddr)
+	}
+	return userIP, nil
+}
+
+// addFile adds to cache and db, checks sha1
+func (s *DefaultServer) addFile(f File, r io.Reader) error {
+	log.Println("server: adding file", f)
+	if s.db.Exists(f) {
+		log.Println("server:", f, "already exists")
+		return nil
+	}
+	if err := s.frontend.Add(f, r); err != nil {
+		log.Println("server: frontend fail:", f, err)
+		return err
+	}
+	if err := s.frontend.Check(f); err != nil {
+		log.Println("server: frontend integrity check failed:", f, err)
+		if err2 := s.frontend.Remove(f); err2 != nil {
+			log.Println("server: fronted failed to remove:", f, err2)
+		}
+		return err
+	}
+	if err := s.db.Add(f); err != nil {
+		log.Println("server: db fail:", f, err)
+		return err
+	}
+	return nil
+}
+
 // handleProxy /p/fileid=asdf;token=asdf;gid=123;page=321;passkey=asdf/filename
 func (s *DefaultServer) handleProxy(c *gin.Context) {
 	mode := s.cfg.Settings.ProxyMode
@@ -208,8 +248,30 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 	filename := c.Param("filename")
 
 	if s.db.Exists(f) {
+		log.Println("proxy:", "file already exists; serving from cache", f)
 		s.frontend.Handle(f, c.Writer)
 		return
+	}
+
+	if mode == ProxyLocalNetworksOpen || mode == ProxyLocalNetworksProtected {
+		ip, err := FromRequest(c.Request)
+		if err != nil {
+			log.Println("proxy:", "unable to extract ip from", c.Request.RemoteAddr)
+			c.String(http.StatusInternalServerError, "unable to parse ip")
+			return
+		}
+		var isLocal bool
+		for _, net := range s.localNetworks {
+			if net.Contains(ip) {
+				isLocal = true
+				break
+			}
+		}
+		if !isLocal {
+			log.Println("proxy:", "access from non-local network by", ip, "<-", c.Request.RemoteAddr)
+			c.String(http.StatusForbidden, "bad ip")
+			return
+		}
 	}
 
 	if mode == ProxyLocalNetworksProtected || mode == ProxyAllNetworksProtected {
@@ -717,6 +779,22 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 
 	if cfg.DontCheckSHA1 {
 		log.Println("warning: not checking sha1")
+	}
+
+	// local networks list init
+	localNetworks := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"fc00::/7", // ipv6
+	}
+	for _, cidr := range localNetworks {
+		_, net, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(err)
+		}
+		s.localNetworks = append(s.localNetworks, *net)
 	}
 
 	s.e = e
