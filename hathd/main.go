@@ -101,9 +101,11 @@ func main() {
 	log.Println("hath:", "starting")
 	cfg.Settings = settings
 	s := hath.NewServer(cfg)
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	if debug {
+		go func() {
+			log.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+	}
 	if filesInDB == 0 || scan {
 		log.Println("server:", "database is empty; trying to scan files in cache")
 		if err := s.PopulateFromFrontend(); err != nil {
