@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,6 +33,11 @@ type Server interface {
 type speedTest struct{}
 
 func (s speedTest) Read(b []byte) (n int, err error) {
+	n = len(b)
+	return n, err
+}
+
+func (s speedTest) Write(b []byte) (n int, err error) {
 	n = len(b)
 	return n, err
 }
@@ -73,12 +79,13 @@ const (
 	argDownloadKey    = "t"
 	downloadScheme    = "http"
 
-	cmdSpeedTest       = "speed_test"
-	cmdDownload        = "cache_files"
-	cmdProxyTest       = "proxy_test"
-	cmdRefreshSettings = "refresh_settings"
-	cmdStillAlive      = "still_alive"
-	cmdList            = "cache_list"
+	cmdSpeedTest         = "speed_test"
+	cmdDownload          = "cache_files"
+	cmdProxyTest         = "proxy_test"
+	cmdRefreshSettings   = "refresh_settings"
+	cmdStillAlive        = "still_alive"
+	cmdList              = "cache_list"
+	cmdThreadedProxyTest = "threaded_proxy_test"
 
 	argIP        = "ipaddr"
 	argPort      = "port"
@@ -650,12 +657,114 @@ func (s *DefaultServer) commandProxyTest(c *gin.Context, args Args) {
 		writeStatus(downloadError, 0)
 		return
 	}
+	log.Println("proxy: tested for", duration)
 	writeStatus(downloadSuccess, duration.Seconds())
 }
 
 // commandStillAlive is heartbeat response
 func (s *DefaultServer) commandStillAlive(c *gin.Context, _ Args) {
 	c.String(http.StatusOK, "I feel FANTASTIC and I'm still alive")
+}
+
+func (s *DefaultServer) commandThreadedProxyTest(c *gin.Context, args Args) {
+	port := args.GetInt("port")
+	ip := net.ParseIP(args.Get("ipaddr"))
+	size := args.GetInt64("testsize")
+	count := args.GetInt("testcount")
+	timestamp := args.GetInt64("testtime")
+	key := args.Get("testkey")
+
+	type Result struct {
+		err      error
+		duration time.Duration
+	}
+
+	var (
+		totalDuration time.Duration
+		testsPassed   int
+		results       = make(chan Result)
+	)
+
+	u := new(url.URL)
+	u.Host = fmt.Sprintf("%s:%d", ip, port)
+	u.Scheme = downloadScheme
+
+	for attempt := 0; attempt < count; attempt++ {
+		u.Path = fmt.Sprintf("/t/%d/%d/%s/%d", size, timestamp, key, rand.Int())
+		go func(workerURL url.URL) {
+			rc, err := s.api.GetFile(&workerURL)
+			if err != nil {
+				results <- Result{err: err}
+				return
+			}
+			defer rc.Close()
+			start := time.Now()
+			n, err := io.CopyN(speedTest{}, rc, size)
+			if err != nil || n != size {
+				log.Println("proxy: failed to download", err)
+				results <- Result{err: errors.New("failed to download")}
+				return
+			}
+
+			duration := time.Now().Sub(start)
+			results <- Result{duration: duration}
+		}(*u)
+	}
+
+	for attempt := 0; attempt < count; attempt++ {
+		result := <-results
+		if result.err != nil {
+			continue
+		}
+		testsPassed++
+		log.Println("proxy:", "test passed", result.duration)
+		totalDuration += result.duration
+	}
+	close(results)
+	totalTimeMilliseconds := totalDuration.Nanoseconds() / int64(time.Millisecond)
+	log.Println("proxy:", "test completed for", totalDuration)
+	fmt.Fprintf(c.Writer, "OK:%d-%d", testsPassed, totalTimeMilliseconds)
+}
+
+// proxyTest
+// /t/:size/:timestamp/:key/:n
+func (s *DefaultServer) proxyTest(c *gin.Context) {
+	sizeS := c.Param("size")
+	timestampS := c.Param("timestamp")
+	key := c.Param("key")
+
+	if !s.isDeltaValid(timestampS) {
+		c.String(http.StatusUnauthorized, "403: bad timestamp")
+		return
+	}
+
+	// !MiscTools.getSHAString("hentai@home-speedtest-" + testsize + "-" + testtime + "-" + Settings.getClientID() + "-" + Settings.getClientKey()).equals(testkey))
+	args := []string{
+		"hentai@home-speedtest",
+		sizeS,
+		timestampS,
+		sInt64(s.cfg.Credentials.ClientID),
+		s.cfg.Credentials.Key,
+	}
+	expected := getSHA1("-", args)
+	if expected != key && !s.cfg.DontCheckSHA1 {
+		c.String(http.StatusUnauthorized, "403: bad key")
+		return
+	}
+
+	size, err := strconv.ParseInt(sizeS, intBase, 64)
+	if size > size100MB {
+		log.Println("proxy:", "got test with too big size", size)
+		c.String(http.StatusUnauthorized, "403: bad size")
+		return
+	}
+
+	// sending test
+	c.Writer.Header().Add(headerContentLength, sizeS)
+	n, err := io.CopyN(c.Writer, speedTest{}, size)
+	if err != nil || n != size {
+		log.Println("proxy:", "speed test failed", err)
+	}
 }
 
 // commandList returns list of files in ache
@@ -866,6 +975,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
 	e.GET("/p/:kwds/:filename", s.handleProxy)
+	e.GET("/t/:size/:timestamp/:key/:n", s.proxyTest)
 	e.GET("/favicon.ico", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "http://g.e-hentai.org/favicon.ico")
 	})
@@ -876,12 +986,13 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 
 	// routing for commands
 	s.commands = map[string]commandHandler{
-		cmdSpeedTest:       s.commandSpeedTest,
-		cmdDownload:        s.commandDownload,
-		cmdProxyTest:       s.commandProxyTest,
-		cmdRefreshSettings: s.commandRefreshSettings,
-		cmdStillAlive:      s.commandStillAlive,
-		cmdList:            s.commandList,
+		cmdSpeedTest:         s.commandSpeedTest,
+		cmdDownload:          s.commandDownload,
+		cmdProxyTest:         s.commandProxyTest,
+		cmdRefreshSettings:   s.commandRefreshSettings,
+		cmdStillAlive:        s.commandStillAlive,
+		cmdList:              s.commandList,
+		cmdThreadedProxyTest: s.commandThreadedProxyTest,
 	}
 
 	// local networks list init
