@@ -746,6 +746,48 @@ func (s *DefaultServer) stopNotificator() {
 	log.Println("stopping server")
 }
 
+const progressChannelSize = 20
+const populateBatchSize = 10000
+
+// PopulateFromFrontend scans frontend and adds all files in it to database
+func (s DefaultServer) PopulateFromFrontend() error {
+	files := make(chan File)
+	progress := make(chan Progress, progressChannelSize)
+	go func() {
+		defer close(files)
+		if err := s.frontend.Scan(files, progress); err != nil {
+			log.Println("cache scan failed; unable to add all files:", err)
+		} else {
+			log.Println("cache scan completed")
+		}
+	}()
+	go func() {
+		for p := range progress {
+			log.Println("scan progres:", p)
+		}
+	}()
+	batch := make([]File, 0, populateBatchSize)
+	for f := range files {
+		batch = append(batch, f)
+		if len(batch) >= populateBatchSize {
+			log.Println("writing", len(batch), "files to db")
+			if err := s.db.AddBatch(batch); err != nil {
+				log.Println("server:", "failed to add to db", err)
+			}
+			// resetting batch
+			batch = batch[:0]
+		}
+	}
+	if len(batch) > 0 {
+		log.Println("writing", len(batch), "files to db")
+		if err := s.db.AddBatch(batch); err != nil {
+			log.Println("server:", "failed to add to db", err)
+		}
+	}
+
+	return nil
+}
+
 // Close stops server
 func (s *DefaultServer) Close() error {
 	close(s.useQuery)
@@ -771,7 +813,6 @@ type ServerConfig struct {
 	MaxDownloadAttemps  int
 	Settings            Settings
 	Debug               bool
-	Gzip                bool
 }
 
 // PopulateDefaults of the config
@@ -818,9 +859,6 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	}
 
 	e := gin.New()
-	// if cfg.Gzip {
-	// 	e.Use(gzip.Gzip(gzip.DefaultCompression))
-	// }
 	e.Use(gin.Logger())
 
 	// routing init

@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	mrand "math/rand"
 	"net/http"
 	"os"
@@ -34,6 +36,20 @@ var (
 	// FileTypesN count of FileTypes
 	FileTypesN = len(FileTypes)
 )
+
+// Progress represents status of some ongoing operation
+type Progress struct {
+	Total   int
+	Current int
+	Percent float32
+}
+
+func (p Progress) String() string {
+	if p.Percent == 0 {
+		p.Percent = float32(p.Current) / float32(p.Total)
+	}
+	return fmt.Sprintf("%d of %d (%f%%)", p.Current, p.Total, p.Percent*100)
+}
 
 // Frontend is cache backend that should processes
 // requests to specidif files, returning them
@@ -109,6 +125,11 @@ func (d *DirectFrontend) Check(file File) error {
 	return d.cache.Check(file)
 }
 
+// Scan scans storage for all files, checks ids and sends files to chan
+func (d *DirectFrontend) Scan(files chan File, progress chan Progress) error {
+	return d.cache.Scan(files, progress)
+}
+
 // DirectCache is engine for serving files in hath directly from block devices
 // i.e. not using any redirects
 type DirectCache interface {
@@ -117,6 +138,7 @@ type DirectCache interface {
 	RemoveBatch(f []File) error
 	Add(file File, r io.Reader) error
 	Check(file File) error
+	Scan(chan File, chan Progress) error
 }
 
 // FileCache serves files from disk
@@ -200,6 +222,64 @@ func (c *FileCache) Check(file File) error {
 	if !bytes.Equal(file.ByteID(), hasher.Sum(nil)) {
 		return ErrFileInconsistent
 	}
+	return nil
+}
+
+// Scan storage for files
+func (c *FileCache) Scan(results chan File, progress chan Progress) error {
+	// scanning for subdirectiries
+	var p Progress
+	defer close(progress)
+	cacheDir, err := os.Open(c.dir)
+	if err != nil {
+		return err
+	}
+	defer cacheDir.Close()
+	subdirNames, err := cacheDir.Readdirnames(0)
+	if err != nil {
+		return err
+	}
+
+	var subdirs []*os.File
+	log.Println("openning directories")
+	for _, subdir := range subdirNames {
+		d, err := os.Open(path.Join(c.dir, subdir))
+		if err != nil {
+			log.Println("cache:", "bad dir", d.Name(), err)
+			continue
+		}
+		info, err := d.Stat()
+		if err != nil || !info.IsDir() {
+			log.Println("cache:", "skipping", d.Name())
+			continue
+		}
+		subdirs = append(subdirs, d)
+	}
+	p.Total = len(subdirs)
+	log.Println("cache: iterating")
+
+	for n, subdir := range subdirs {
+		p.Current = n
+		progress <- p
+		defer subdir.Close()
+		start := time.Now()
+		log.Println("cache: scanning", subdir.Name())
+		files, err := subdir.Readdirnames(0)
+		if err != nil {
+			log.Println("cache:", "error while scanning dir", subdir.Name(), err)
+			continue
+		}
+		log.Println("scanned", subdir.Name(), len(files), time.Now().Sub(start))
+		for _, file := range files {
+			f, err := FileFromID(file)
+			if err != nil {
+				log.Println("cache:", "error while parsing id", file)
+				continue
+			}
+			results <- f
+		}
+	}
+
 	return nil
 }
 
