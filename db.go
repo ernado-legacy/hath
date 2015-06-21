@@ -3,6 +3,7 @@ package hath
 import (
 	"bytes"
 	"encoding/binary"
+	"io"
 	"log"
 	"time"
 
@@ -34,6 +35,8 @@ type DataBase interface {
 	GetOldFilesCount(deadline time.Time) (count int64, err error)
 	Size() (int64, error)
 	Exists(f File) bool
+	Get(id []byte) (File, error)
+	GetBatch(files chan File, max int64) (err error)
 }
 
 // BoltDB stores info about files in cache
@@ -357,6 +360,30 @@ func (d BoltDB) Size() (sum int64, err error) {
 		})
 	})
 	return sum, err
+}
+
+// GetBatch reads files and sends it to channel
+func (d BoltDB) GetBatch(files chan File, max int64) (err error) {
+	var count int64
+	err = d.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(dbFileBucket)
+		var f File
+		return bucket.ForEach(func(k []byte, v []byte) error {
+			count++
+			if err = d.deserialize(k, v, &f); err != nil {
+				return err
+			}
+			files <- f
+			if count >= max && max != 0 {
+				return io.EOF
+			}
+			return nil
+		})
+	})
+	if err == io.EOF {
+		err = nil
+	}
+	return err
 }
 
 // Count is count of files in database

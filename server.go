@@ -78,6 +78,7 @@ const (
 	cmdProxyTest       = "proxy_test"
 	cmdRefreshSettings = "refresh_settings"
 	cmdStillAlive      = "still_alive"
+	cmdList            = "cache_list"
 
 	argIP        = "ipaddr"
 	argPort      = "port"
@@ -474,8 +475,10 @@ func (s *DefaultServer) handleCommand(c *gin.Context) {
 	// checking remote ip
 	if !s.cfg.Settings.IsRPCServer(c.Request) {
 		log.Println("server:", "got request from suspicous origin", c.Request.RemoteAddr)
-		c.String(http.StatusUnauthorized, "403: not authorised")
-		return
+		if !s.cfg.Debug {
+			c.String(http.StatusUnauthorized, "403: not authorised")
+			return
+		}
 	}
 
 	// checking crypto sign
@@ -655,6 +658,28 @@ func (s *DefaultServer) commandStillAlive(c *gin.Context, _ Args) {
 	c.String(http.StatusOK, "I feel FANTASTIC and I'm still alive")
 }
 
+// commandList returns list of files in ache
+func (s *DefaultServer) commandList(c *gin.Context, args Args) {
+	log.Println("server:", "sending file list")
+	files := make(chan File)
+	max := args.GetInt64("max_filecount")
+	// spawning goroutine that reads from database
+	// and sends files to channel
+	log.Println("server:", "we have", s.db.Count(), "files in db")
+	go func() {
+		if err := s.db.GetBatch(files, max); err != nil {
+			log.Println("server:", "failed to generate file list", err)
+		}
+		close(files)
+	}()
+	var count int64
+	for file := range files {
+		count++
+		fmt.Fprintln(c.Writer, file)
+	}
+	log.Println("server:", "sent", count)
+}
+
 func (s *DefaultServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.e.ServeHTTP(w, r)
 }
@@ -745,6 +770,8 @@ type ServerConfig struct {
 	UpdateRate          time.Duration
 	MaxDownloadAttemps  int
 	Settings            Settings
+	Debug               bool
+	Gzip                bool
 }
 
 // PopulateDefaults of the config
@@ -774,8 +801,29 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	s.db = cfg.DataBase
 	s.frontend = cfg.Frontend
 
-	// routing init
+	// config init
+	if cfg.DontCheckTimestamps {
+		log.Println("warning: not checking timestamps")
+	}
+
+	if cfg.DontCheckSHA1 {
+		log.Println("warning: not checking sha1")
+	}
+
+	if cfg.Debug {
+		log.Println("warning:", "running in debug mode")
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	e := gin.New()
+	// if cfg.Gzip {
+	// 	e.Use(gzip.Gzip(gzip.DefaultCompression))
+	// }
+	e.Use(gin.Logger())
+
+	// routing init
 	e.Use(gin.Recovery())
 	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
@@ -795,14 +843,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 		cmdProxyTest:       s.commandProxyTest,
 		cmdRefreshSettings: s.commandRefreshSettings,
 		cmdStillAlive:      s.commandStillAlive,
-	}
-
-	if cfg.DontCheckTimestamps {
-		log.Println("warning: not checking timestamps")
-	}
-
-	if cfg.DontCheckSHA1 {
-		log.Println("warning: not checking sha1")
+		cmdList:            s.commandList,
 	}
 
 	// local networks list init
