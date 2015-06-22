@@ -2,6 +2,7 @@ package hath // import "cydev.ru/hath"
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha1"
 	"errors"
 	"fmt"
@@ -50,6 +51,7 @@ const (
 	actionFileAdd      = "file_register"
 	actionFileRemove   = "file_uncache"
 	actionLogin        = "client_login"
+	actionTokens       = "download_list"
 
 	settingStaticRanges = "static_ranges"
 
@@ -66,6 +68,8 @@ const (
 	intBase           = 10
 	keyStampDelimiter = "-"
 	fileIDDelimiter   = ";"
+
+	tokenDelimiter = " "
 )
 
 var (
@@ -313,6 +317,24 @@ func (c Client) notify(action string) error {
 		return ErrUnexpected{Response: r}
 	}
 	return nil
+}
+
+// Tokens issues requests to obtain tokens for downloading files
+func (c Client) Tokens(files []File) (result map[string]string, err error) {
+	result = make(map[string]string)
+	buff := new(bytes.Buffer)
+	for _, f := range files {
+		buff.WriteString(fmt.Sprintf("%s;", f))
+	}
+	r, err := c.getResponse(actionTokens, buff.String())
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range r.Data {
+		elems := strings.SplitN(s, tokenDelimiter, 2)
+		result[elems[0]] = elems[1]
+	}
+	return result, err
 }
 
 // ParseVars parses k=v map from r.Data

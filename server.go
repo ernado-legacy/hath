@@ -381,9 +381,60 @@ func (s *DefaultServer) handleImage(c *gin.Context) {
 		c.String(http.StatusForbidden, "403: bad keystamp")
 		return
 	}
-	s.useQuery <- f
-	s.frontend.Handle(f, c.Writer)
-	log.Println("server:", "served", f)
+	if s.db.Exists(f) {
+		s.frontend.Handle(f, c.Writer)
+		s.useQuery <- f
+		log.Println("server:", "served", f)
+		return
+	}
+	if !s.cfg.Settings.StaticRanges.Contains(f) {
+		log.Println("server:", "not found", f)
+		c.String(http.StatusNotFound, "404: not found")
+		return
+	}
+
+	log.Println("server:", "downloading file from static range", f.Range())
+	tokens, err := s.api.Tokens([]File{f})
+	if err != nil {
+		log.Println("server:", "failed to get tokens for file:", err)
+	}
+	token, ok := tokens[f.String()]
+	if !ok {
+		c.String(http.StatusNotFound, "404: not found")
+		return
+	}
+
+	// generating url
+	u := new(url.URL)
+	u.Scheme = downloadScheme
+	u.Host = s.cfg.Settings.RequestServer
+	u.Path = fmt.Sprintf("/r/%s/%s/%d-%d/%s", f, token, 1, 1, "ondemand")
+
+	// allocating buffer
+	buff := f.Buffer()
+	writer := io.MultiWriter(buff, c.Writer)
+	rc, err := s.api.GetFile(u)
+	defer rc.Close()
+	if err != nil {
+		log.Println("server:", "download failed:", err)
+		c.String(http.StatusInternalServerError, "500: unable to download from hath server")
+		return
+	}
+	n, err := io.CopyN(writer, rc, f.Size)
+	if err != nil || n != f.Size {
+		log.Println("server:", "download failed:", err)
+		return
+	}
+	go func() {
+		defer buff.Reset()
+		log.Println("server:", "saving file to cache/db")
+		if err := s.addFile(f, buff); err != nil {
+			log.Println("proxy:", "add failed", err)
+			return
+		}
+		s.registerQuery <- f
+		log.Println("server:", "cached", f)
+	}()
 }
 
 func getSHA1(sep string, args []string) string {
@@ -462,7 +513,7 @@ func (s *DefaultServer) removeAllUnused(deadline time.Time) error {
 }
 
 func (s *DefaultServer) stillAliveLoop() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 5)
 	defer ticker.Stop()
 	defer s.wg.Done()
 	for {
@@ -510,6 +561,8 @@ func (s *DefaultServer) removeLoop() {
 // /servercmd/<command>/<additional:kwds>/<timestamp:int>/<key>
 func (s *DefaultServer) handleCommand(c *gin.Context) {
 	// checking remote ip
+
+	log.Println("command:", c.Request.URL.Path)
 	if !s.cfg.Settings.IsRPCServer(c.Request) {
 		log.Println("server:", "got request from suspicous origin", c.Request.RemoteAddr)
 		if !s.cfg.Debug {
