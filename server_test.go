@@ -18,6 +18,21 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
+func TestSHA1(t *testing.T) {
+	expected := "f99a7fe31c62deb76bbdae5f02c857d8cb7ec0cd"
+	Convey("SHA1 with delimiter check", t, func() {
+		elems := []string{
+			"hentai@home-servercmd",
+			"still_alive",
+			"",
+			"2655",
+			"1434990559",
+			"x9QDVh26NrjlaHzDVR9f",
+		}
+		So(getSHA1("-", elems), ShouldEqual, expected)
+	})
+}
+
 func TestServer(t *testing.T) {
 	Convey("Server", t, func() {
 		var (

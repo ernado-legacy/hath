@@ -50,6 +50,7 @@ type DefaultServer struct {
 	db            DataBase
 	e             *gin.Engine
 	useQuery      chan File
+	registerQuery chan File
 	wg            *sync.WaitGroup
 	started       bool
 	commands      map[string]commandHandler
@@ -336,6 +337,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 				log.Println("proxy:", "add failed", err)
 				return
 			}
+			s.registerQuery <- f
 			log.Println("proxy:", "cached", f)
 		}()
 		downloaded = true
@@ -351,6 +353,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 // handleImage /h/<fileid>/<additional:kwds>/<filename>
 func (s *DefaultServer) handleImage(c *gin.Context) {
 	fileID := c.Param("fileid")
+	log.Println("server:", "serving", fileID)
 	args := ParseArgs(c.Param("kwds"))
 	// parsing timestamp and keystamp
 	stamps := strings.Split(args.Get(argsKeystamp), keyStampDelimiter)
@@ -380,13 +383,16 @@ func (s *DefaultServer) handleImage(c *gin.Context) {
 	}
 	s.useQuery <- f
 	s.frontend.Handle(f, c.Writer)
+	log.Println("server:", "served", f)
 }
 
 func getSHA1(sep string, args []string) string {
 	hasher := sha1.New()
 	toHash := strings.Join(args, sep)
-	h := hasher.Sum([]byte(toHash))
-	return hex.EncodeToString(h)
+	fmt.Fprint(hasher, toHash)
+	hasher.Sum([]byte(toHash))
+	// log.Println("checksum of", toHash)
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 type commandHandler func(*gin.Context, Args)
@@ -397,13 +403,18 @@ func (s *DefaultServer) isDeltaValid(ts string) bool {
 	}
 	timestamp, err := strconv.ParseInt(ts, intBase, 64)
 	if err != nil {
+		log.Println("server:", "timestamp check failed", err)
 		return false
 	}
 	delta := time.Now().Unix() - timestamp
 	if delta < 0 {
 		delta *= -1
 	}
-	return delta < maximumTimeLag
+	if delta > maximumTimeLag {
+		log.Println("server:", "timestamp delta is too bing", delta, ">", maximumTimeLag)
+		return false
+	}
+	return true
 }
 
 var (
@@ -412,7 +423,6 @@ var (
 )
 
 func (s *DefaultServer) removeUnused(deadline time.Time) error {
-
 	files, err := s.db.GetOldFiles(maxRemoveCount, deadline)
 	if err != nil {
 		return err
@@ -451,6 +461,23 @@ func (s *DefaultServer) removeAllUnused(deadline time.Time) error {
 	}
 }
 
+func (s *DefaultServer) stillAliveLoop() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	defer s.wg.Done()
+	for {
+		select {
+		case t := <-ticker.C:
+			if err := s.api.StillAlive(); err != nil {
+				log.Println("server:", "still alive notification failed:", err)
+			}
+			log.Println("server:", "still alive", t)
+		case _ = <-s.stop:
+			return
+		}
+	}
+}
+
 func (s *DefaultServer) removeLoop() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -466,10 +493,13 @@ func (s *DefaultServer) removeLoop() {
 			if count == 0 {
 				continue
 			}
+			log.Println("server:", "files to remove:", count)
 			s.updateLock.Lock()
 			defer s.updateLock.Unlock()
 			if err := s.removeAllUnused(deadline); err != nil {
 				log.Println("error while removing files", err)
+			} else {
+				log.Println("server:", "removed", count)
 			}
 		case _ = <-s.stop:
 			return
@@ -483,7 +513,7 @@ func (s *DefaultServer) handleCommand(c *gin.Context) {
 	if !s.cfg.Settings.IsRPCServer(c.Request) {
 		log.Println("server:", "got request from suspicous origin", c.Request.RemoteAddr)
 		if !s.cfg.Debug {
-			c.String(http.StatusUnauthorized, "403: not authorised")
+			c.String(http.StatusUnauthorized, "401: not authorised")
 			return
 		}
 	}
@@ -499,12 +529,13 @@ func (s *DefaultServer) handleCommand(c *gin.Context) {
 
 	// checkign timestamp delta
 	if !s.isDeltaValid(timestampS) {
-		c.String(http.StatusUnauthorized, "403: bad timestamp")
+		c.String(http.StatusUnauthorized, "401: bad timestamp")
 		return
 	}
 
 	hashArgs := []string{
 		cmdKeyStart,
+		command,
 		kwds,
 		sClientID,
 		timestampS,
@@ -512,7 +543,8 @@ func (s *DefaultServer) handleCommand(c *gin.Context) {
 	}
 	keyCalculated := getSHA1(cmdKeyDelimiter, hashArgs)
 	if key != keyCalculated && !s.cfg.DontCheckSHA1 {
-		c.String(http.StatusUnauthorized, "403: bad sign")
+		log.Println("server:", "checksum missmatch", key, keyCalculated)
+		c.String(http.StatusUnauthorized, "401: bad sign")
 		return
 	}
 	handler, ok := s.commands[command]
@@ -580,16 +612,23 @@ func (s *DefaultServer) commandDownload(c *gin.Context, args Args) {
 
 // commandRefreshSettings precesses request to refresh settings
 func (s *DefaultServer) commandRefreshSettings(c *gin.Context, args Args) {
-	log.Println("server:", "refreshing settings")
-	settings, err := s.api.Settings()
-	if err != nil {
-		log.Println("server:", "failed to refresh settings", err)
+	if err := s.refreshSettings(); err != nil {
 		c.String(http.StatusOK, "false")
 		return
 	}
 	c.String(http.StatusOK, "true")
+}
+
+func (s *DefaultServer) refreshSettings() error {
+	log.Println("server:", "refreshing settings")
+	settings, err := s.api.Settings()
+	if err != nil {
+		log.Println("server:", "failed to refresh settings", err)
+		return err
+	}
 	s.cfg.Settings = settings
 	log.Println("server:", "refreshed settings")
+	return err
 }
 
 // commandProxyTest processes speed-test requests for other hath clients
@@ -807,7 +846,7 @@ func (s *DefaultServer) useLoop() {
 		s.updateLock.Lock()
 		defer s.updateLock.Unlock()
 		if err := s.db.UseBatch(files); err != nil {
-			log.Println("error while updating lastUsage", err)
+			log.Println("error while updating lastUsage:", err)
 		}
 		files = nil
 	}
@@ -816,6 +855,38 @@ func (s *DefaultServer) useLoop() {
 	for {
 		select {
 		case f := <-s.useQuery:
+			files = append(files, f)
+		case <-ticker.C:
+			update()
+		case <-s.stop:
+			return
+		}
+	}
+}
+
+// file register loop
+func (s *DefaultServer) registerLoop() {
+	defer s.wg.Done()
+	ticker := time.NewTicker(s.cfg.UpdateRate)
+	defer ticker.Stop()
+
+	var files []File
+	update := func() {
+		if files == nil {
+			return
+		}
+		if err := s.api.AddFiles(files); err != nil {
+			log.Println("api: failed to add files:", err)
+		} else {
+			log.Println("api:", "registered files:", len(files))
+		}
+		files = nil
+	}
+	// we need to register last files before stopping server
+	defer update()
+	for {
+		select {
+		case f := <-s.registerQuery:
 			files = append(files, f)
 		case <-ticker.C:
 			update()
@@ -836,6 +907,16 @@ func (s *DefaultServer) addFromURL(f File, u *url.URL) error {
 
 // Start server internal goroutines
 func (s *DefaultServer) Start() error {
+	log.Println("server:", "starting")
+	if err := s.api.Login(); err != nil {
+		return err
+	}
+
+	if err := s.refreshSettings(); err != nil {
+		return err
+	}
+
+	s.stop = make(chan bool)
 	go s.stopNotificator()
 
 	// starting lastUsage update loop
@@ -846,8 +927,44 @@ func (s *DefaultServer) Start() error {
 	s.wg.Add(1)
 	go s.removeLoop()
 
+	// starting still alive loop
+	s.wg.Add(1)
+	go s.stillAliveLoop()
+
+	// starting register loop
+	s.wg.Add(1)
+	go s.registerLoop()
+
 	s.started = true
+	log.Println("server:", "started")
 	return nil
+}
+
+// Listen on confgured port
+func (s *DefaultServer) Listen() error {
+	addr := fmt.Sprintf(":%d", s.cfg.Settings.Port)
+	go func() {
+		maxRetries := 3
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			time.Sleep(time.Millisecond * 500)
+			log.Println("client:", "sending start notification")
+			if err := s.api.Start(); err != nil {
+				log.Println("client:", "start notification failed:", err)
+				if err == ErrClientStartupFlood {
+					wait := time.Second * 60
+					log.Println("client:", "will try again in", wait)
+					time.Sleep(wait)
+					continue
+				}
+				continue
+			}
+			log.Println("client:", "registered in hath network")
+			return
+		}
+		log.Fatalln("client:", "failed to register in hath network")
+	}()
+	log.Println("server:", "listening on", addr)
+	return http.ListenAndServe(addr, s)
 }
 
 func (s *DefaultServer) stopNotificator() {
@@ -899,12 +1016,21 @@ func (s DefaultServer) PopulateFromFrontend() error {
 
 // Close stops server
 func (s *DefaultServer) Close() error {
+	if !s.started {
+		return nil
+	}
 	close(s.useQuery)
+	close(s.registerQuery)
 	close(s.stop)
 	s.wg.Wait()
 
+	if err := s.api.Close(); err != nil {
+		log.Println("server:", "close notification failed", err)
+	}
+
 	s.db.Close()
 	s.started = false
+	log.Println("server:", "stopped")
 	return nil
 }
 
@@ -933,7 +1059,7 @@ func (cfg *ServerConfig) PopulateDefaults() {
 		cfg.RemoveRate = time.Hour
 	}
 	if cfg.Client == nil {
-		cfg.Client = NewClient(ClientConfig{Credentials: cfg.Credentials})
+		cfg.Client = NewClient(ClientConfig{Credentials: cfg.Credentials, Debug: cfg.Debug})
 	}
 	if cfg.UpdateRate == time.Second*0 {
 		cfg.UpdateRate = time.Second * 5
@@ -1013,6 +1139,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 
 	s.e = e
 	s.useQuery = make(chan File, useQuerySize)
+	s.registerQuery = make(chan File)
 	s.wg = new(sync.WaitGroup)
 	s.api = cfg.Client
 	s.stop = make(chan bool)

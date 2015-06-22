@@ -49,6 +49,7 @@ const (
 	actionFileDownload = "download_list"
 	actionFileAdd      = "file_register"
 	actionFileRemove   = "file_uncache"
+	actionLogin        = "client_login"
 
 	settingStaticRanges = "static_ranges"
 
@@ -58,7 +59,7 @@ const (
 	responseFailStartupFlood         = "FAIL_STARTUP_FLOOD"
 	responseFailOtherClientConnected = "FAIL_OTHER_CLIENT_CONNECTED"
 
-	maximumTimeLag = 10
+	maximumTimeLag = 600
 	maxRemoveCount = 50
 
 	httpGET           = "GET"
@@ -106,7 +107,8 @@ type Credentials struct {
 // ClientConfig is configuration for client
 type ClientConfig struct {
 	Credentials
-	Host string
+	Host  string
+	Debug bool
 }
 
 // Client is api for hath rpc
@@ -187,22 +189,24 @@ func (c Client) ActionURL(args ...string) *url.URL {
 }
 
 func (c Client) getResponse(args ...string) (r APIResponse, err error) {
-	start := time.Now()
 	u := c.ActionURL(args...)
 
-	// log request
-	defer func() {
-		end := time.Now().Sub(start)
-		status := "OK"
-		if err != nil {
-			status = err.Error()
-		}
-		if !r.Success {
-			status = "ERR"
-		}
-		log.Println(httpGET, u, end, status)
-	}()
-
+	if c.cfg.Debug {
+		// log request
+		start := time.Now()
+		defer func() {
+			end := time.Now().Sub(start)
+			status := "OK"
+			if err != nil {
+				status = err.Error()
+			}
+			if !r.Success {
+				status = "ERR"
+			}
+			log.Println(httpGET, u, end, status)
+			log.Println("response:", r)
+		}()
+	}
 	// perform request
 	res, err := c.httpClient.Get(u.String())
 	if err != nil {
@@ -251,6 +255,21 @@ func (c Client) Start() error {
 		return ErrClientOtherConnected
 	}
 	return ErrUnexpected{Response: r}
+}
+
+// Login performs sync check and authentication
+func (c Client) Login() error {
+	log.Println("client:", "checking sync")
+	if err := c.CheckStats(); err != nil {
+		return err
+	}
+	log.Println("client:", "performing authentication")
+	r, err := c.getResponse(actionLogin)
+	if err != nil || !r.Success {
+		return ErrUnexpected{Response: r, Err: err}
+	}
+	log.Println("client:", "authentication succeeded")
+	return nil
 }
 
 // func (c Client) getBlacklist(d time.Duration) error {
@@ -474,7 +493,14 @@ func (c Client) Settings() (cfg Settings, err error) {
 		}
 		cfg.RPCServers = append(cfg.RPCServers, ip)
 	}
-	fmt.Printf("%+v\n", cfg)
+	log.Println("got settings:")
+	log.Println("\tstatic ranges:", cfg.StaticRanges)
+	log.Println("\tproxy mode:", cfg.ProxyMode)
+	log.Println("\taddr:", cfg.Host, cfg.Port)
+
+	if c.cfg.Debug {
+		fmt.Printf("%+v\n", cfg)
+	}
 	return cfg, err
 }
 
@@ -511,6 +537,35 @@ func (c Client) RemoveFiles(files []File) error {
 	}
 	arg := strings.Join(idList, fileIDDelimiter)
 	r, err := c.getResponse(actionRemove, arg)
+	if err != nil {
+		return err
+	}
+	if !r.Success {
+		return ErrUnexpected{Response: r, Err: errors.New("not succeed")}
+	}
+	return nil
+}
+
+// AddFiles notifies api server of registered files
+func (c Client) AddFiles(files []File) error {
+	count := len(files)
+	if count > maxRemoveCount {
+		// adding files in batches of maxRemoveCount
+		var index int
+		for index = 0; index < count; index += maxRemoveCount {
+			if err := c.AddFiles(files[index : index+maxRemoveCount]); err != nil {
+				return err
+			}
+		}
+		// adding reamaning files
+		files = files[index:]
+	}
+	idList := make([]string, len(files))
+	for i, f := range files {
+		idList[i] = f.String()
+	}
+	arg := strings.Join(idList, fileIDDelimiter)
+	r, err := c.getResponse(actionFileAdd, arg)
 	if err != nil {
 		return err
 	}

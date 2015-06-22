@@ -13,6 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/gin-gonic/gin"
+	"github.com/xlab/closer"
 )
 
 const version = "0.5dev"
@@ -86,26 +87,17 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	clientCfg := hath.ClientConfig{}
-	clientCfg.Credentials = credentials
-	c := hath.NewClient(clientCfg)
-	if err := c.CheckStats(); err != nil {
-		log.Fatal("hath: error while check stats:", err)
-	}
-
-	log.Println("hath:", "retrieving settings from api server")
-	settings, err := c.Settings()
-	if err != nil {
-		log.Fatal("hath:", "error while retrieving sertings", err)
-	}
 	log.Println("hath:", "starting")
-	cfg.Settings = settings
 	s := hath.NewServer(cfg)
+
+	// profiling endpoint
 	if debug {
 		go func() {
 			log.Println(http.ListenAndServe("localhost:6060", nil))
 		}()
 	}
+
+	// populating database from disk
 	if filesInDB == 0 || scan {
 		log.Println("server:", "database is empty; trying to scan files in cache")
 		if err := s.PopulateFromFrontend(); err != nil {
@@ -113,7 +105,15 @@ func main() {
 		}
 		log.Println("server:", "cache scanned")
 	}
-	addr := fmt.Sprintf(":%d", settings.Port)
-	log.Println("hath:", "listening on", addr)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", settings.Port), s))
+
+	closer.Bind(func() {
+		s.Close()
+	})
+
+	// starting server
+	if err := s.Start(); err != nil {
+		log.Fatal(err)
+	}
+	log.Fatal(s.Listen())
+	closer.Hold()
 }

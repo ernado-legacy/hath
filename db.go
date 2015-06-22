@@ -234,16 +234,17 @@ func (d BoltDB) UseBatch(files []File) error {
 	fileBucket := tx.Bucket(dbFileBucket)
 	indexBucket := tx.Bucket(dbTimeIndexBucket)
 
-	for _, f := range files {
+	for _, file := range files {
 		// getting file from database
 		// for consistency
-		f, err = d.Get(f.ByteID())
+		f, err := d.Get(file.ByteID())
 		if err != nil {
-			return err
+			log.Println("db:", "err:", file, err)
+			continue
 		}
 
 		if err := indexBucket.Delete(f.indexKey()); err != nil {
-			return err
+			log.Println("db:", "lastUsed index update failed:", f)
 		}
 		f.LastUsage = lastUsage
 		if err := indexBucket.Put(f.indexKey(), nil); err != nil {
