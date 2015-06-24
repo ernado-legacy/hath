@@ -71,6 +71,7 @@ const (
 	size100MB           = 10 * size10MB
 	headerContentLength = "Content-Length"
 	fileInfoDelimiter   = ":"
+	stillAliveInterval  = time.Minute * 5
 
 	downloadError     = "FAIL"
 	downloadSuccess   = "OK"
@@ -513,7 +514,7 @@ func (s *DefaultServer) removeAllUnused(deadline time.Time) error {
 }
 
 func (s *DefaultServer) stillAliveLoop() {
-	ticker := time.NewTicker(time.Minute * 5)
+	ticker := time.NewTicker(stillAliveInterval)
 	defer ticker.Stop()
 	defer s.wg.Done()
 	for {
@@ -522,7 +523,7 @@ func (s *DefaultServer) stillAliveLoop() {
 			if err := s.api.StillAlive(); err != nil {
 				log.Println("server:", "still alive notification failed:", err)
 			}
-			log.Println("server:", "still alive", t)
+			log.Println("server:", "still sent alive", t)
 		case _ = <-s.stop:
 			return
 		}
@@ -561,7 +562,6 @@ func (s *DefaultServer) removeLoop() {
 // /servercmd/<command>/<additional:kwds>/<timestamp:int>/<key>
 func (s *DefaultServer) handleCommand(c *gin.Context) {
 	// checking remote ip
-
 	log.Println("command:", c.Request.URL.Path)
 	if !s.cfg.Settings.IsRPCServer(c.Request) {
 		log.Println("server:", "got request from suspicous origin", c.Request.RemoteAddr)
