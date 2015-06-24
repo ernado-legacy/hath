@@ -237,6 +237,66 @@ func (s *DefaultServer) addFile(f File, r io.Reader) error {
 	return nil
 }
 
+func (s *DefaultServer) proxy(c *gin.Context, f File, token string, galleryID, page int, filename string) {
+	log.Println("proxy:", f)
+
+	u := new(url.URL)
+	u.Scheme = downloadScheme
+	u.Host = s.cfg.Settings.RequestServer
+	u.Path = fmt.Sprintf("/r/%s/%s/%d-%d/%s", f, token, galleryID, page, filename)
+
+	var downloadFromHathNetwork bool
+	var downloaded bool
+	for attempt := 1; attempt <= s.cfg.MaxDownloadAttemps; attempt++ {
+		downloadFromHathNetwork = attempt != s.cfg.MaxDownloadAttemps
+
+		// skip download from hath network
+		if !downloadFromHathNetwork {
+			log.Println("proxy: falling back to direct download")
+			q := make(url.Values)
+			q.Add("nl", "1") // so fucking obvious
+			u.RawQuery = q.Encode()
+		}
+
+		log.Println("proxy:", "downloading", f)
+
+		rc, err := s.api.GetFile(u)
+		if err != nil {
+			log.Println("proxy: download attempt failed", err)
+			continue
+		}
+		defer rc.Close()
+
+		buff := f.Buffer()
+		w := io.MultiWriter(buff, c.Writer)
+		// proxying data without buffering for speed-up
+		c.Writer.Header().Add(headerContentLength, sInt64(f.Size))
+		n, err := io.CopyN(w, rc, f.Size)
+		if err != nil || n != f.Size {
+			log.Println("proxy: failed", err)
+			return
+		}
+		// async saving file to db/frontend
+		go func() {
+			defer buff.Reset()
+			log.Println("proxy:", "saving file to cache/db")
+			if err := s.addFile(f, buff); err != nil {
+				log.Println("proxy:", "add failed", err)
+				return
+			}
+			s.registerQuery <- f
+			log.Println("proxy:", "cached", f)
+		}()
+		downloaded = true
+		break
+	}
+	if downloaded {
+		log.Println("proxy:", "downloaded", f)
+	} else {
+		log.Println("proxy:", "failed to download", f)
+	}
+}
+
 // handleProxy /p/fileid=asdf;token=asdf;gid=123;page=321;passkey=asdf/filename
 func (s *DefaultServer) handleProxy(c *gin.Context) {
 	mode := s.cfg.Settings.ProxyMode
@@ -294,61 +354,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 		}
 	}
 
-	u := new(url.URL)
-	u.Scheme = downloadScheme
-	u.Host = s.cfg.Settings.RequestServer
-	u.Path = fmt.Sprintf("/r/%s/%s/%d-%d/%s", fileID, token, galleryID, page, filename)
-
-	var downloadFromHathNetwork bool
-	var downloaded bool
-	for attempt := 1; attempt <= s.cfg.MaxDownloadAttemps; attempt++ {
-		downloadFromHathNetwork = attempt != s.cfg.MaxDownloadAttemps
-
-		// skip download from hath network
-		if !downloadFromHathNetwork {
-			log.Println("proxy: falling back to direct download")
-			q := make(url.Values)
-			q.Add("nl", "1") // so fucking obvious
-			u.RawQuery = q.Encode()
-		}
-
-		log.Println("proxy:", "downloading", f)
-
-		rc, err := s.api.GetFile(u)
-		if err != nil {
-			log.Println("proxy: download attempt failed", err)
-			continue
-		}
-		defer rc.Close()
-
-		buff := f.Buffer()
-		w := io.MultiWriter(buff, c.Writer)
-		// proxying data without buffering for speed-up
-		c.Writer.Header().Add(headerContentLength, sInt64(f.Size))
-		n, err := io.CopyN(w, rc, f.Size)
-		if err != nil || n != f.Size {
-			log.Println("proxy: failed", err)
-			return
-		}
-		// async saving file to db/frontend
-		go func() {
-			defer buff.Reset()
-			log.Println("proxy:", "saving file to cache/db")
-			if err := s.addFile(f, buff); err != nil {
-				log.Println("proxy:", "add failed", err)
-				return
-			}
-			s.registerQuery <- f
-			log.Println("proxy:", "cached", f)
-		}()
-		downloaded = true
-		break
-	}
-	if downloaded {
-		log.Println("proxy:", "downloaded", f)
-	} else {
-		log.Println("proxy:", "failed to download", f)
-	}
+	s.proxy(c, f, token, galleryID, page, filename)
 }
 
 // handleImage /h/<fileid>/<additional:kwds>/<filename>
@@ -404,38 +410,7 @@ func (s *DefaultServer) handleImage(c *gin.Context) {
 		c.String(http.StatusNotFound, "404: not found")
 		return
 	}
-
-	// generating url
-	u := new(url.URL)
-	u.Scheme = downloadScheme
-	u.Host = s.cfg.Settings.RequestServer
-	u.Path = fmt.Sprintf("/r/%s/%s/%d-%d/%s", f, token, 1, 1, "ondemand")
-
-	// allocating buffer
-	buff := f.Buffer()
-	writer := io.MultiWriter(buff, c.Writer)
-	rc, err := s.api.GetFile(u)
-	defer rc.Close()
-	if err != nil {
-		log.Println("server:", "download failed:", err)
-		c.String(http.StatusInternalServerError, "500: unable to download from hath server")
-		return
-	}
-	n, err := io.CopyN(writer, rc, f.Size)
-	if err != nil || n != f.Size {
-		log.Println("server:", "download failed:", err)
-		return
-	}
-	go func() {
-		defer buff.Reset()
-		log.Println("server:", "saving file to cache/db")
-		if err := s.addFile(f, buff); err != nil {
-			log.Println("proxy:", "add failed", err)
-			return
-		}
-		s.registerQuery <- f
-		log.Println("server:", "cached", f)
-	}()
+	s.proxy(c, f, token, 1, 1, "ondemand")
 }
 
 func getSHA1(sep string, args []string) string {
