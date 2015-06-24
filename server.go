@@ -273,6 +273,8 @@ func (s *DefaultServer) proxy(c *gin.Context, f File, token string, galleryID, p
 		w := io.MultiWriter(buff, c.Writer)
 		// proxying data without buffering for speed-up
 		c.Writer.Header().Add(headerContentLength, sInt64(f.Size))
+		c.Writer.Header().Add(headerContentType, f.ContentType())
+
 		n, err := io.CopyN(w, rc, f.Size)
 		if err != nil || n != f.Size {
 			log.Println("proxy: failed", err)
@@ -934,6 +936,10 @@ func (s *DefaultServer) registerLoop() {
 	for {
 		select {
 		case f := <-s.registerQuery:
+			// not registering files from static range
+			if s.cfg.Settings.StaticRanges.Contains(f) {
+				continue
+			}
 			files = append(files, f)
 		case <-ticker.C:
 			update()
