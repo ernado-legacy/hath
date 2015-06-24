@@ -100,6 +100,7 @@ type APIResponse struct {
 // HTTPClient is underlying http client
 type HTTPClient interface {
 	Get(url string) (*http.Response, error)
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // Credentials of hath client
@@ -524,6 +525,26 @@ func (c Client) Settings() (cfg Settings, err error) {
 		fmt.Printf("%+v\n", cfg)
 	}
 	return cfg, err
+}
+
+// RequestFile from hath server
+func (c Client) RequestFile(f File, u *url.URL) (rc io.ReadCloser, err error) {
+	req, err := http.NewRequest(httpGET, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.12) Gecko/20080201 Firefox/2.0.0.12")
+
+	// generating hath header
+	hashed := hashStrings(c.cfg.Key, f.String())
+	req.Header.Add("Hath-Request", fmt.Sprintf("%d-%s", c.cfg.ClientID, hashed))
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Body, nil
 }
 
 // GetFile returns io.ReadCloser for given url

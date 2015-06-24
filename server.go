@@ -97,6 +97,8 @@ const (
 	argTestCount = "testcount"
 	argTestTime  = "testtime"
 	argTestKey   = "testkey"
+
+	onDemandFilename = "ondemand"
 )
 
 // ProxyMode sets proxy security politics
@@ -260,7 +262,7 @@ func (s *DefaultServer) proxy(c *gin.Context, f File, token string, galleryID, p
 
 		log.Println("proxy:", "downloading", f)
 
-		rc, err := s.api.GetFile(u)
+		rc, err := s.api.RequestFile(f, u)
 		if err != nil {
 			log.Println("proxy: download attempt failed", err)
 			continue
@@ -293,6 +295,7 @@ func (s *DefaultServer) proxy(c *gin.Context, f File, token string, galleryID, p
 	if downloaded {
 		log.Println("proxy:", "downloaded", f)
 	} else {
+		c.String(http.StatusInternalServerError, "failed to download")
 		log.Println("proxy:", "failed to download", f)
 	}
 }
@@ -360,8 +363,17 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 // handleImage /h/<fileid>/<additional:kwds>/<filename>
 func (s *DefaultServer) handleImage(c *gin.Context) {
 	fileID := c.Param("fileid")
+	filename := c.Param("filename")
 	log.Println("server:", "serving", fileID)
 	args := ParseArgs(c.Param("kwds"))
+
+	ip, err := FromRequest(c.Request)
+	if err != nil {
+		log.Println("server:", "unable to extract ip from", c.Request.RemoteAddr)
+		c.String(http.StatusInternalServerError, "unable to parse ip")
+		return
+	}
+
 	// parsing timestamp and keystamp
 	stamps := strings.Split(args.Get(argsKeystamp), keyStampDelimiter)
 	if len(stamps) != 2 {
@@ -406,11 +418,18 @@ func (s *DefaultServer) handleImage(c *gin.Context) {
 		log.Println("server:", "failed to get tokens for file:", err)
 	}
 	token, ok := tokens[f.String()]
-	if !ok {
+	if !ok || filename == onDemandFilename {
 		c.String(http.StatusNotFound, "404: not found")
 		return
 	}
-	s.proxy(c, f, token, 1, 1, "ondemand")
+	// checking for request from local network
+	for _, net := range s.localNetworks {
+		if net.Contains(ip) {
+			c.String(http.StatusNotFound, "404: not found locally")
+			return
+		}
+	}
+	s.proxy(c, f, token, 1, 1, onDemandFilename)
 }
 
 func getSHA1(sep string, args []string) string {

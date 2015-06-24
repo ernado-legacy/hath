@@ -27,6 +27,10 @@ func (t testClient) Get(url string) (r *http.Response, err error) {
 	return t.response, t.err
 }
 
+func (t testClient) Do(req *http.Request) (r *http.Response, err error) {
+	return t.response, t.err
+}
+
 func TestClientURL(t *testing.T) {
 	var (
 		cid int64 = 666
