@@ -67,7 +67,7 @@ const (
 )
 
 // Process event
-func (s Stats) Process(e Event) {
+func (s *Stats) Process(e Event) {
 	if e.Type == EventSent {
 		s.FilesSent++
 		s.FilesSentBytes += e.File.Size
@@ -288,6 +288,7 @@ func (s *DefaultServer) eventLoop() {
 			if !ok {
 				return
 			}
+			log.Println("event:", e)
 			s.stats.Process(e)
 		case <-s.stop:
 			return
@@ -1219,6 +1220,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)
 	e.GET("/p/:kwds/:filename", s.handleProxy)
 	e.GET("/t/:size/:timestamp/:key/:n", s.proxyTest)
+	e.GET("/api/stats", s.handleStats)
 	e.GET("/favicon.ico", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "http://g.e-hentai.org/favicon.ico")
 	})
