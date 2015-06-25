@@ -91,11 +91,11 @@ func main() {
 	s := hath.NewServer(cfg)
 
 	// profiling endpoint
-	if debug {
-		go func() {
-			log.Println(http.ListenAndServe("localhost:6060", nil))
-		}()
-	}
+	// if debug {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+	// }
 
 	// populating database from disk
 	if filesInDB == 0 || scan {
