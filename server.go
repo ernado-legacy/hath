@@ -42,6 +42,42 @@ func (s speedTest) Write(b []byte) (n int, err error) {
 	return n, err
 }
 
+// Stats for server
+type Stats struct {
+	FilesSent            int
+	FilesSentBytes       int64
+	FilesDownloaded      int
+	FilesDownloadedBytes int64
+}
+
+// Event from server
+type Event struct {
+	Type EventType
+	File File
+}
+
+// EventType is type of event from server
+type EventType byte
+
+const (
+	// EventSent issued when file is sent to hath network
+	EventSent EventType = iota
+	// EventDownloaded issued when file is downloaded by server from hath
+	EventDownloaded
+)
+
+// Process event
+func (s Stats) Process(e Event) {
+	if e.Type == EventSent {
+		s.FilesSent++
+		s.FilesSentBytes += e.File.Size
+	}
+	if e.Type == EventDownloaded {
+		s.FilesDownloaded++
+		s.FilesDownloadedBytes += e.File.Size
+	}
+}
+
 // DefaultServer uses hard drive to respond
 type DefaultServer struct {
 	api           *Client
@@ -57,6 +93,9 @@ type DefaultServer struct {
 	stop          chan bool
 	updateLock    sync.Locker
 	localNetworks []net.IPNet
+	stats         Stats
+	events        chan Event
+	headlessStart bool
 }
 
 const (
@@ -239,6 +278,23 @@ func (s *DefaultServer) addFile(f File, r io.Reader) error {
 	return nil
 }
 
+func (s *DefaultServer) eventLoop() {
+	log.Println("eventloop:", "started")
+	defer log.Println("eventloop:", "stopped")
+	defer s.wg.Done()
+	for {
+		select {
+		case e, ok := <-s.events:
+			if !ok {
+				return
+			}
+			s.stats.Process(e)
+		case <-s.stop:
+			return
+		}
+	}
+}
+
 func (s *DefaultServer) proxy(c *gin.Context, f File, token string, galleryID, page int, filename string) {
 	log.Println("proxy:", f)
 
@@ -291,6 +347,8 @@ func (s *DefaultServer) proxy(c *gin.Context, f File, token string, galleryID, p
 			s.registerQuery <- f
 			log.Println("proxy:", "cached", f)
 		}()
+		s.events <- Event{EventDownloaded, f}
+		s.events <- Event{EventSent, f}
 		downloaded = true
 		break
 	}
@@ -326,6 +384,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 	if s.db.Exists(f) {
 		log.Println("proxy:", "file already exists; serving from cache", f)
 		s.frontend.Handle(f, c.Writer)
+		s.events <- Event{EventSent, f}
 		return
 	}
 
@@ -405,7 +464,8 @@ func (s *DefaultServer) handleImage(c *gin.Context) {
 	if s.db.Exists(f) {
 		s.frontend.Handle(f, c.Writer)
 		s.useQuery <- f
-		log.Println("server:", "served", f)
+		s.events <- Event{EventSent, f}
+		log.Println("server:", "served", f, "to", ip)
 		return
 	}
 	if !s.cfg.Settings.StaticRanges.Contains(f) {
@@ -423,13 +483,6 @@ func (s *DefaultServer) handleImage(c *gin.Context) {
 	if !ok || filename == onDemandFilename {
 		c.String(http.StatusNotFound, "404: not found")
 		return
-	}
-	// checking for request from local network
-	for _, net := range s.localNetworks {
-		if net.Contains(ip) {
-			c.String(http.StatusNotFound, "404: not found locally")
-			return
-		}
 	}
 	s.proxy(c, f, token, 1, 1, onDemandFilename)
 }
@@ -855,6 +908,10 @@ func (s *DefaultServer) proxyTest(c *gin.Context) {
 	}
 }
 
+func (s *DefaultServer) handleStats(c *gin.Context) {
+	c.JSON(http.StatusOK, s.stats)
+}
+
 // commandList returns list of files in ache
 func (s *DefaultServer) commandList(c *gin.Context, args Args) {
 	log.Println("server:", "sending file list")
@@ -961,16 +1018,22 @@ func (s *DefaultServer) addFromURL(f File, u *url.URL) error {
 // Start server internal goroutines
 func (s *DefaultServer) Start() error {
 	log.Println("server:", "starting")
-	if err := s.api.Login(); err != nil {
-		return err
-	}
+	if !s.headlessStart {
+		if err := s.api.Login(); err != nil {
+			return err
+		}
 
-	if err := s.refreshSettings(); err != nil {
-		return err
+		if err := s.refreshSettings(); err != nil {
+			return err
+		}
 	}
 
 	s.stop = make(chan bool)
 	go s.stopNotificator()
+
+	// starting event loop
+	s.wg.Add(1)
+	go s.eventLoop()
 
 	// starting lastUsage update loop
 	s.wg.Add(1)
@@ -1074,6 +1137,7 @@ func (s *DefaultServer) Close() error {
 	}
 	close(s.useQuery)
 	close(s.registerQuery)
+	close(s.events)
 	close(s.stop)
 	s.wg.Wait()
 
@@ -1197,5 +1261,6 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	s.api = cfg.Client
 	s.stop = make(chan bool)
 	s.updateLock = new(sync.Mutex)
+	s.events = make(chan Event)
 	return s
 }
