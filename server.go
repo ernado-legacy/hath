@@ -66,6 +66,16 @@ const (
 	EventDownloaded
 )
 
+func (t EventType) String() string {
+	if t == EventSent {
+		return "sent"
+	}
+	if t == EventDownloaded {
+		return "downloaded"
+	}
+	return "unknown"
+}
+
 // Process event
 func (s *Stats) Process(e Event) {
 	if e.Type == EventSent {
