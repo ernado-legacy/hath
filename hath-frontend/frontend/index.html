@@ -5,16 +5,225 @@
 
     <!-- Optional theme -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+    <style>
+    /* Space out content a bit */
+    body {
+      padding-top: 20px;
+      padding-bottom: 20px;
+    }
 
+    /* Everything but the jumbotron gets side spacing for mobile first views */
+    .header,
+    .marketing,
+    .footer {
+      padding-right: 15px;
+      padding-left: 15px;
+    }
+
+    /* Custom page header */
+    .header {
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    /* Make the masthead heading the same height as the navigation */
+    .header h3 {
+      margin-top: 0;
+      margin-bottom: 0;
+      line-height: 40px;
+    }
+
+    /* Custom page footer */
+    .footer {
+      padding-top: 19px;
+      color: #777;
+      border-top: 1px solid #e5e5e5;
+    }
+
+    /* Customize container */
+    @media (min-width: 768px) {
+      .container {
+        max-width: 730px;
+      }
+    }
+    .container-narrow > hr {
+      margin: 30px 0;
+    }
+
+    /* Main marketing message and sign up button */
+    .jumbotron {
+      text-align: center;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .jumbotron .btn {
+      padding: 14px 24px;
+      font-size: 21px;
+    }
+
+    /* Supporting marketing content */
+    .marketing {
+      margin: 40px 0;
+    }
+    .marketing p + h4 {
+      margin-top: 28px;
+    }
+
+    /* Responsive: Portrait tablets and up */
+    @media screen and (min-width: 768px) {
+      /* Remove the padding we set earlier */
+      .header,
+      .marketing,
+      .footer {
+        padding-right: 0;
+        padding-left: 0;
+      }
+      /* Space out the masthead */
+      .header {
+        margin-bottom: 30px;
+      }
+      /* Remove the bottom border on the jumbotron for visual effect */
+      .jumbotron {
+        border-bottom: 0;
+      }
+    }
+
+    #stats {
+        margin-top: 10px;
+    }
+    </style>
 </head>
 <body>
-    <div>
-        <h1>Hello world</h1>
-    </div>
+    <div class="container">
+      <div class="header clearfix">
+        <nav>
+          <ul class="nav nav-pills pull-right">
+            <li role="presentation" class="active"><a href="/gui/">Home</a></li>
+            <li role="presentation"><a href="https://github.com/cydev/hath/issues/new" target="_blank">Report bug</a></li>
+            <li role="presentation"><a href="https://cydev.ru/" target="_blank">About</a></li>
+          </ul>
+        </nav>
+        <h3 class="text-muted">hath</h3>
+      </div>
 
+      <div class="jumbotron">
+        <p class="lead">Cras justo odio, dapibus ac facilisis in, egestas eget quam. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus.</p>
+        <p>
+            <a class="btn btn-default disabled" href="#" role="button">suspend</a>
+            <a class="btn btn-danger disabled" href="#" role="button">stop</a>
+            <div class="progress">
+              <div class="progress-bar progress-bar-striped active" role="progressbar" aria-valuenow="45" aria-valuemin="0" aria-valuemax="100" style="width: 45%">
+                <span class="sr-only">45% Complete</span>
+              </div>
+            </div>
+        </p>
+        <canvas id="chart" width="600" height="400"></canvas>
+        <div class="container" id="stats">
+            <ul class="list-group">
+              <li class="list-group-item active">
+                <span class="badge" id="bytes-sent">14</span>
+                <span class="badge" id="files-sent">14</span>
+                Sent
+              </li>
+              <li class="list-group-item ">
+                <span class="badge" id="bytes-downloaded">14</span>
+                <span class="badge" id="files-downloaded">14</span>
+                Downloaded
+              </li>
+            </ul>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <p>developed by cydev, 2015</p>
+      </footer>
+
+    </div>
     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
     <!-- Latest compiled and minified JavaScript -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <script src="/gui/js/Chart.min.js"></script>
+
+    </script>
+    <script>
+        var data = [
+            {
+                value: 1,
+                color:"#F7464A",
+                highlight: "#FF5A5E",
+                label: "Downloaded"
+            },
+            {
+                value: 1,
+                color: "#46BFBD",
+                highlight: "#5AD3D1",
+                label: "Sent"
+            },
+        ];
+
+        var chartData = {
+            labels: ["January", "February", "March", "April", "May", "June", "July"],
+            datasets: [
+                {
+                    label: "My First dataset",
+                    fillColor: "rgba(220,220,220,0.2)",
+                    strokeColor: "rgba(220,220,220,1)",
+                    pointColor: "rgba(220,220,220,1)",
+                    pointStrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "rgba(220,220,220,1)",
+                    data: [65, 59, 80, 81, 56, 55, 40]
+                },
+                {
+                    label: "My Second dataset",
+                    fillColor: "rgba(151,187,205,0.2)",
+                    strokeColor: "rgba(151,187,205,1)",
+                    pointColor: "rgba(151,187,205,1)",
+                    pointStrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "rgba(151,187,205,1)",
+                    data: [28, 48, 40, 19, 86, 27, 90]
+                }
+            ]
+        };
+
+
+        var options = {
+            segmentShowStroke : false,
+            percentageInnerCutout : 40,
+            animateRotate : false,
+            animationEasing: "easeOutBack",
+        };
+
+        var ctx = document.getElementById("chart").getContext("2d");
+        var myLineChart = new Chart(ctx).Line(chartData, options);
+
+
+        setTimeout(function(){
+            myLineChart.addData([40, 60], "August");
+            myLineChart.removeData("January");
+        }, 1000)
+
+        setTimeout(function(){
+            myLineChart.addData([20, 10], "Kekus");
+            myLineChart.removeData("February");
+        }, 2000)
+
+        // var ctx = document.getElementById("chart").getContext("2d");
+        // var myDoughnutChart = new Chart(ctx).Doughnut(data, options);
+
+
+        $.getJSON( "/api/stats", function( data ) {
+            // myDoughnutChart.segments[0].value = data.FilesSent;
+            // myDoughnutChart.segments[1].value = data.FilesDownloaded;
+            // myDoughnutChart.update();
+
+            $('#bytes-sent').text(data.FilesSentBytes / 1024. / 1024. + 'mb');
+            $('#files-sent').text(data.FilesSent);
+            $('#bytes-downloaded').text(data.FilesDownloadedBytes / 1024. / 1024. + 'mb');
+            $('#files-downloaded').text(data.FilesDownloaded);
+
+            console.log(data);
+        });
+    </script>
 </body>
 </html>
