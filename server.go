@@ -102,7 +102,6 @@ type DefaultServer struct {
 	commands      map[string]commandHandler
 	stop          chan bool
 	updateLock    sync.Locker
-	localNetworks []net.IPNet
 	stats         Stats
 	events        chan Event
 	headlessStart bool
@@ -407,7 +406,7 @@ func (s *DefaultServer) handleProxy(c *gin.Context) {
 			return
 		}
 		var isLocal bool
-		for _, net := range s.localNetworks {
+		for _, net := range LocalNetworks {
 			if net.Contains(ip) {
 				isLocal = true
 				break
@@ -1197,6 +1196,28 @@ func (cfg *ServerConfig) PopulateDefaults() {
 	}
 }
 
+var (
+	// LocalNetworks is slice of net.IPNet for all local networks subnets
+	LocalNetworks []net.IPNet
+)
+
+func init() {
+	localNetworks := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"fc00::/7", // ipv6
+	}
+	for _, cidr := range localNetworks {
+		_, net, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(err)
+		}
+		LocalNetworks = append(LocalNetworks, *net)
+	}
+}
+
 // NewServer cleares default server with provided client and frontend
 func NewServer(cfg ServerConfig) *DefaultServer {
 	cfg.PopulateDefaults()
@@ -1248,22 +1269,6 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 		cmdStillAlive:        s.commandStillAlive,
 		cmdList:              s.commandList,
 		cmdThreadedProxyTest: s.commandThreadedProxyTest,
-	}
-
-	// local networks list init
-	localNetworks := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"127.0.0.0/8",
-		"fc00::/7", // ipv6
-	}
-	for _, cidr := range localNetworks {
-		_, net, err := net.ParseCIDR(cidr)
-		if err != nil {
-			panic(err)
-		}
-		s.localNetworks = append(s.localNetworks, *net)
 	}
 
 	s.e = e
