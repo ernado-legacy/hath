@@ -44,10 +44,13 @@ func (s speedTest) Write(b []byte) (n int, err error) {
 
 // Stats for server
 type Stats struct {
+	FilesTotal           int
 	FilesSent            int
 	FilesSentBytes       int64
 	FilesDownloaded      int
 	FilesDownloadedBytes int64
+	Started              time.Time
+	Uptime               time.Duration
 }
 
 // Event from server
@@ -64,6 +67,10 @@ const (
 	EventSent EventType = iota
 	// EventDownloaded issued when file is downloaded by server from hath
 	EventDownloaded
+	// EventAdded issued when file is added to cache
+	EventAdded
+	// EventRemoved issued when file is removed from cache
+	EventRemoved
 )
 
 func (t EventType) String() string {
@@ -72,6 +79,12 @@ func (t EventType) String() string {
 	}
 	if t == EventDownloaded {
 		return "downloaded"
+	}
+	if t == EventAdded {
+		return "added"
+	}
+	if t == EventRemoved {
+		return "removed"
 	}
 	return "unknown"
 }
@@ -85,6 +98,12 @@ func (s *Stats) Process(e Event) {
 	if e.Type == EventDownloaded {
 		s.FilesDownloaded++
 		s.FilesDownloadedBytes += e.File.Size
+	}
+	if e.Type == EventAdded {
+		s.FilesTotal++
+	}
+	if e.Type == EventRemoved {
+		s.FilesTotal--
 	}
 }
 
@@ -291,6 +310,9 @@ func (s *DefaultServer) eventLoop() {
 	log.Println("eventloop:", "started")
 	defer log.Println("eventloop:", "stopped")
 	defer s.wg.Done()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case e, ok := <-s.events:
@@ -301,6 +323,8 @@ func (s *DefaultServer) eventLoop() {
 			s.stats.Process(e)
 		case <-s.stop:
 			return
+		case t := <-ticker.C:
+			s.stats.Uptime = t.Sub(s.stats.Started)
 		}
 	}
 }
@@ -1037,6 +1061,10 @@ func (s *DefaultServer) Start() error {
 			return err
 		}
 	}
+
+	s.stats.FilesTotal = s.db.Count()
+	s.stats.Started = time.Now()
+	s.stats.Uptime = 0
 
 	s.stop = make(chan bool)
 	go s.stopNotificator()
