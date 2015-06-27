@@ -12,3 +12,6 @@ Near alpha stage, client is already usable, but lacks testing
 
 Tested by me
 [![Client stats](https://habrastorage.org/files/8c5/954/8fb/8c59548fb4624361ab9c1aee3b925fca.png)](https://github.com/cydev/hath)
+
+Unit-tested on linux and windows;
+Tested on real workload by ernado on ubuntu 15.04 and windows 8.1 x64 
