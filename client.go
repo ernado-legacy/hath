@@ -277,13 +277,6 @@ func (c Client) Login() error {
 	return nil
 }
 
-// func (c Client) getBlacklist(d time.Duration) error {
-// 	duration := strconv.FormatInt(int64(d.Seconds()), 10)
-// 	r, err := c.getResponse(actionGetBlacklist, duration)
-// 	log.Println(r)
-// 	return err
-// }
-
 // StillAlive sends heartbeat
 func (c Client) StillAlive() error {
 	return c.notify(actionStillAlive)
