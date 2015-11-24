@@ -1273,7 +1273,7 @@ func NewServer(cfg ServerConfig) *DefaultServer {
 	e := gin.New()
 	e.Use(gin.Logger())
 	e.Use(gin.Recovery())
-	
+
 	// routing init
 	e.GET("/h/:fileid/:kwds/:filename", s.handleImage)
 	e.GET("/servercmd/:command/:kwds/:timestamp/:key", s.handleCommand)

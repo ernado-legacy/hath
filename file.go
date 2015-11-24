@@ -117,7 +117,7 @@ const (
 )
 
 var (
-	// ContentTypes is map of file types to conent types
+	// ContentTypes is map of file types to content types
 	ContentTypes = map[FileType]string{
 		JPG:          "image/jpeg",
 		PNG:          "image/png",
@@ -382,7 +382,8 @@ func (f File) Basex() string {
 	d := f.ByteID()
 	n := big.NewInt(0)
 	n.SetBytes(d)
-	return basex.Encode(n.String())
+	s, _ := basex.Encode(n.String())
+	return s
 }
 
 // Marshal serializes file info

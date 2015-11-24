@@ -115,3 +115,57 @@ func TestDBInit(t *testing.T) {
 		})
 	})
 }
+
+func TestLevelDBInit(t *testing.T) {
+	Convey("LevelDB", t, func() {
+		g := FileGenerator{
+			SizeMax:       randFileSizeMax,
+			SizeMin:       randFileSizeMin,
+			ResolutionMax: randFileResolutionMax,
+			ResolutionMin: randFileResolutionMin,
+		}
+		tmpDB, err := ioutil.TempFile(os.TempDir(), "db")
+		So(err, ShouldBeNil)
+		tmpDB.Close()
+		defer os.Remove(tmpDB.Name())
+		db, err := NewLevelDB(tmpDB.Name())
+		So(err, ShouldBeNil)
+		So(db, ShouldNotBeNil)
+		Convey("Implements DataBase", func() {
+			dbInterface := reflect.TypeOf((*DataBase)(nil)).Elem()
+			So(reflect.TypeOf(db).Implements(dbInterface), ShouldBeTrue)
+		})
+		Convey("Insert", func() {
+			rec := g.NewFake()
+			rec.LastUsage -= 20
+			So(db.Exists(rec), ShouldBeFalse)
+			err := db.Add(rec)
+			So(err, ShouldBeNil)
+			So(db.Exists(rec), ShouldBeTrue)
+			Convey("Get", func() {
+				f, err := db.Get(rec.ByteID())
+				So(err, ShouldBeNil)
+				So(f.LastUsage, ShouldEqual, rec.LastUsage)
+				So(f.Type, ShouldEqual, rec.Type)
+				So(f.HexID(), ShouldEqual, rec.HexID())
+				So(f.String(), ShouldEqual, rec.String())
+				Convey("Use", func() {
+					now := time.Now().Unix()
+					So(db.Use(f), ShouldBeNil)
+					Convey("Get again", func() {
+						fn, err := db.Get(rec.ByteID())
+						So(err, ShouldBeNil)
+						So(f.String(), ShouldEqual, fn.String())
+						So(f.LastUsage, ShouldNotEqual, fn.LastUsage)
+						So(fn.LastUsage, ShouldEqual, now)
+					})
+				})
+			})
+			Convey("Get 404", func() {
+				rec := g.NewFake()
+				_, err := db.Get(rec.ByteID())
+				So(err, ShouldEqual, ErrFileNotFound)
+			})
+		})
+	})
+}

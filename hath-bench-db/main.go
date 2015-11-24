@@ -45,7 +45,7 @@ func init() {
 	flag.BoolVar(&collect, "collect", true, "collect old files")
 	flag.BoolVar(&onlyOpen, "only-open", false, "only open db")
 	flag.BoolVar(&onlyMemory, "only-memory", false, "only load to memory")
-	flag.BoolVar(&onlyMemory, "only-array", false, "only array of hashes")
+	flag.BoolVar(&onlyArray, "only-array", false, "only array of hashes")
 	flag.StringVar(&dbpath, "dbfile", "db.bolt", "working directory")
 	flag.IntVar(&cpus, "cpus", runtime.GOMAXPROCS(0), "cpu to use")
 }
@@ -158,7 +158,7 @@ func main() {
 		}
 
 	}
-	db, err := hath.NewDB(dbpath)
+	db, err := hath.NewLevelDB(dbpath)
 	defer db.Close()
 	if err != nil {
 		log.Fatal(err)

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -45,6 +47,202 @@ type DataBase interface {
 // implements DataBase interface
 type BoltDB struct {
 	db *bolt.DB
+}
+
+// LevelDB implementation for database
+type LevelDB struct {
+	files *leveldb.DB
+	index *leveldb.DB
+}
+
+// NewLevelDB creates dbPath.files and dbPath.index dbs
+func NewLevelDB(dbPath string) (d *LevelDB, err error) {
+	d = new(LevelDB)
+	fileDB := dbPath + ".files"
+	indexDB := dbPath + ".index"
+
+	files, err := leveldb.OpenFile(fileDB, nil)
+	if err != nil {
+		return nil, err
+	}
+	d.files = files
+
+	index, err := leveldb.OpenFile(indexDB, nil)
+	if err != nil {
+		return nil, err
+	}
+	d.index = index
+
+	return d, nil
+}
+
+func (db LevelDB) GetOldFilesCount(deadline time.Time) (count int64, err error) {
+	iter := db.index.NewIterator(&util.Range{
+		Start: getIndexStart(deadline),
+		Limit: getIndexEnd(deadline),
+	}, nil)
+	for iter.Next() {
+		count++
+	}
+	iter.Release()
+	return count, iter.Error()
+}
+
+func (db LevelDB) GetOldFiles(maxCount int, deadline time.Time) (files []File, err error) {
+	var (
+		f     File
+		count int
+	)
+	iter := db.index.NewIterator(&util.Range{
+		Start: getIndexStart(deadline),
+		Limit: getIndexEnd(deadline),
+	}, nil)
+	for iter.Next() {
+		f, err = db.Get(getIDFromIndexKey(iter.Value()))
+		if err != nil {
+			break
+		}
+		files = append(files, f)
+		count++
+		if count >= maxCount {
+			break
+		}
+	}
+	return files, err
+}
+
+func (db LevelDB) Count() (count int) {
+	iter := db.files.NewIterator(nil, nil)
+	for iter.Next() {
+		count++
+	}
+	iter.Release()
+	return count
+}
+
+func (db LevelDB) Size() (sum int64, err error) {
+	iter := db.files.NewIterator(nil, nil)
+	var f File
+	for iter.Next() {
+		if err := db.deserialize(iter.Key(), iter.Value(), &f); err != nil {
+			return 0, err
+		}
+		sum += f.Size
+	}
+	iter.Release()
+	return sum, nil
+}
+
+func (db LevelDB) Add(f File) error {
+	if err := db.files.Put(f.ByteID(), db.serialize(f), nil); err != nil {
+		return err
+	}
+	if err := db.index.Put(f.indexKey(), nil, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db LevelDB) AddBatch(f []File) error {
+	batchFiles := new(leveldb.Batch)
+	batchIndex := new(leveldb.Batch)
+	for _, v := range f {
+		batchFiles.Put(v.ByteID(), db.serialize(v))
+		batchIndex.Put(v.indexKey(), nil)
+	}
+	if err := db.files.Write(batchFiles, nil); err != nil {
+		return err
+	}
+	if err := db.index.Write(batchIndex, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db LevelDB) Remove(f File) error {
+	if err := db.files.Delete(f.ByteID(), nil); err != nil {
+		return err
+	}
+	return db.index.Delete(f.indexKey(), nil)
+}
+
+func (db LevelDB) RemoveBatch(files []File) error {
+	for _, f := range files {
+		if err := db.files.Delete(f.ByteID(), nil); err != nil {
+			return err
+		}
+		if err := db.index.Delete(f.indexKey(), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (db LevelDB) Close() error {
+	if err := db.index.Close(); err != nil {
+		return err
+	}
+	return db.files.Close()
+}
+
+func (db LevelDB) Get(id []byte) (f File, err error) {
+	var data []byte
+	data, err = db.files.Get(id, nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return f, ErrFileNotFound
+		}
+		return f, err
+	}
+	return f, db.deserialize(id, data, &f)
+}
+
+func (db LevelDB) GetBatch(files chan File, max int64) (err error) {
+	defer close(files)
+	iter := db.files.NewIterator(nil, nil)
+	var f File
+	for iter.Next() {
+		if err := db.deserialize(iter.Key(), iter.Value(), &f); err != nil {
+			return err
+		}
+		files <- f
+	}
+	iter.Release()
+	return nil
+}
+
+func (db LevelDB) Exists(f File) bool {
+	ret, _ := db.files.Has(f.ByteID(), nil)
+	return ret
+}
+
+func (db LevelDB) Use(f File) error {
+	lastUsage := time.Now().Unix()
+	if err := db.index.Delete(f.indexKey(), nil); err != nil {
+		return err
+	}
+	f.LastUsage = lastUsage
+	if err := db.index.Put(f.indexKey(), nil, nil); err != nil {
+		return err
+	}
+	return db.files.Put(f.ByteID(), db.serialize(f), nil)
+}
+
+func (db LevelDB) UseBatch(files []File) error {
+	lastUsage := time.Now().Unix()
+	for _, f := range files {
+		if err := db.index.Delete(f.indexKey(), nil); err != nil {
+			return err
+		}
+		f.LastUsage = lastUsage
+		if err := db.index.Put(f.indexKey(), nil, nil); err != nil {
+			return err
+		}
+		if err := db.files.Put(f.ByteID(), db.serialize(f), nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewDB new db
@@ -89,7 +287,19 @@ func (d BoltDB) serialize(f File) []byte {
 	return result
 }
 
+func (_ LevelDB) serialize(f File) []byte {
+	data := f.Bytes()
+	result := make([]byte, len(data)-HashSize)
+	copy(result[:], data[HashSize:])
+	return result
+}
+
 func (d BoltDB) deserialize(k, v []byte, f *File) error {
+	data := bytes.Join([][]byte{k, v}, nil)
+	return FileFromBytesTo(data, f)
+}
+
+func (_ LevelDB) deserialize(k, v []byte, f *File) error {
 	data := bytes.Join([][]byte{k, v}, nil)
 	return FileFromBytesTo(data, f)
 }
@@ -263,7 +473,7 @@ func getIndexStart(deadline time.Time) []byte {
 }
 
 // getIndexEnd returns range max possible key,
-// which corresponding file is lastUsage <= deadline
+// which corresponding file has lastUsage <= deadline
 func getIndexEnd(deadline time.Time) []byte {
 	timeBytes := make([]byte, timeBytes)
 	binary.BigEndian.PutUint64(timeBytes, uint64(deadline.Unix()))
