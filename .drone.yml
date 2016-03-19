@@ -1,0 +1,6 @@
+image: golang
+clone:
+  path: cydev.ru/hath
+script:
+  - go get -t .
+  - go test .
