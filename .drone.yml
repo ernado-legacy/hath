@@ -1,12 +1,14 @@
-image: golang:$$GO_VERSION
 clone:
   path: cydev.ru/hath
-script:
-  - go get -t .
-  - go test .
+
+build:
+  image: golang:$$GO_VERSION
+  commands:
+    - go get -t .
+    - go build
+    - go test
 
 matrix:
   GO_VERSION:
     - 1.5
     - 1.6
-    - latest
