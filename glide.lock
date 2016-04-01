@@ -1,0 +1,60 @@
+hash: 2013f4a267cb570ad104dd05c6412c79d2e8bd804f2dfabe0467bf77ed721dff
+updated: 2016-04-01T21:53:13.14181857+03:00
+imports:
+- name: github.com/boltdb/bolt
+  version: 831b652a7f8dbefaf94da0eb66abd46c0c4bcf23
+- name: github.com/BurntSushi/toml
+  version: bbd5bb678321a0d6e58f1099321dfa73391c1b6f
+- name: github.com/daaku/go.zipexe
+  version: a5fe2436ffcb3236e175e5149162b41cd28bd27d
+- name: github.com/dineshappavoo/basex
+  version: b662a931be0274100c1652616947418691108c0e
+- name: github.com/GeertJohan/go.rice
+  version: 0f3f5fde32fd1f755632a3d31ba2ec6d449e387b
+  subpackages:
+  - embedded
+- name: github.com/gin-gonic/gin
+  version: 4a6bc4aac4607e253bcda67c8c5bcda693d2388e
+  subpackages:
+  - binding
+  - render
+- name: github.com/golang/protobuf
+  version: 2402d76f3d41f928c7902a765dfc872356dd3aad
+  subpackages:
+  - proto
+- name: github.com/golang/snappy
+  version: 5f1c01d9f64b941dd9582c638279d046eda6ca31
+- name: github.com/kardianos/osext
+  version: 29ae4ffbc9a6fe9fb2bc5029050ce6996ea1d3bc
+- name: github.com/manucorporat/sse
+  version: ee05b128a739a0fb76c7ebd3ae4810c1de808d6d
+- name: github.com/pivotal-golang/bytefmt
+  version: 263ce04fc1d71bc7d50c241293488b3f54c779e5
+- name: github.com/syndtr/goleveldb
+  version: 93fc893f2dadb96ffde441c7546cc67ea290a3a8
+  subpackages:
+  - leveldb
+  - leveldb/util
+  - leveldb/cache
+  - leveldb/comparer
+  - leveldb/errors
+  - leveldb/filter
+  - leveldb/iterator
+  - leveldb/journal
+  - leveldb/memdb
+  - leveldb/opt
+  - leveldb/storage
+  - leveldb/table
+- name: github.com/xlab/closer
+  version: 9ac1c238130f4dbdffae6242f6a737f90e2178a7
+- name: golang.org/x/net
+  version: f315505cf3349909cdf013ea56690da34e96a451
+  subpackages:
+  - context
+- name: golang.org/x/sys
+  version: 320cb01ddbbf0473674c2585f9b6e245721de355
+  subpackages:
+  - unix
+- name: gopkg.in/go-playground/validator.v8
+  version: c193cecd124b5cc722d7ee5538e945bdb3348435
+devImports: []

@@ -134,18 +134,17 @@ var (
 )
 
 // ParseFileType returns FileType from string
-func ParseFileType(filetype string) FileType {
-	filetype = strings.ToLower(filetype)
-	if filetype == "jpg" || filetype == "jpeg" {
+func ParseFileType(t string) FileType {
+	switch strings.ToLower(t) {
+	case "jpg", "jpeg":
 		return JPG
-	}
-	if filetype == "png" {
+	case "png":
 		return PNG
-	}
-	if filetype == "gif" {
+	case "gif":
 		return GIF
+	default:
+		return UnknownImage
 	}
-	return UnknownImage
 }
 
 // File is hath file representation
@@ -165,7 +164,16 @@ type File struct {
 
 // ContentType of image
 func (f File) ContentType() string {
-	return ContentTypes[f.Type]
+	switch f.Type {
+	case JPG:
+		return "image/jpeg"
+	case PNG:
+		return "image/png"
+	case GIF:
+		return "image/gif"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // Range returns static range of file

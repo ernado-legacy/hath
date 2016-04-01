@@ -1,0 +1,13 @@
+package: cydev.ru/hath
+import:
+- package: github.com/BurntSushi/toml
+- package: github.com/GeertJohan/go.rice
+- package: github.com/boltdb/bolt
+- package: github.com/dineshappavoo/basex
+- package: github.com/gin-gonic/gin
+- package: github.com/pivotal-golang/bytefmt
+- package: github.com/syndtr/goleveldb
+  subpackages:
+  - leveldb
+  - leveldb/util
+- package: github.com/xlab/closer
