@@ -2,7 +2,7 @@
 // and is optimized for small files, that are often read, rarely written and very rarely deleted.
 // It is O(1) for read/write/delete. Package is low-level and subject to the strict limitations.
 //
-// On file delete it is only marked as deleted causing fragmentation,
+// On file delete it is only marked as deleted causing fragmentation
 // file system space will only become available for usage only after
 // scheduled optimization commonly named "vacuum". During vacuum
 // files are reorganized in way that minimize space consumption.
@@ -20,11 +20,22 @@ import (
 //
 // ReadAt(b, File.Offset) with len(b) = FileStructureSize will read serialized info, and File.Read(b)
 // will read it into structure fields.
+//
+// Bulk element structure:
+//    |---------------------------------| -1
+//    |---------- File.Offset ----------| 0
+//    |     FileStructureSize bytes     |
+//    |           of File               |
+//    |-File.Offset + FileStructureSize-| 16
+//    |                                 |
+//    |         File.Size bytes         |
+//    |                                 |
+//    |---------------------------------| size + 16
 type File struct {
 	ID        int64 // -> Link.ID
 	Offset    int64 // -> Link.Offset
-	Size      int64
-	Timestamp int64
+	Size      int64 // len(data)
+	Timestamp int64 // Time.Unix()
 }
 
 // FileStructureSize is minimum buf length required in File.{Read,Put} and is 256 bit or 32 byte.
