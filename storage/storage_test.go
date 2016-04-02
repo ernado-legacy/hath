@@ -12,13 +12,13 @@ func TestFile(t *testing.T) {
 		Timestamp: time.Now().Unix(),
 		Offset: 66234,
 	}
-	buf := make([]byte, 8 * 4)
+	buf := make([]byte, FileStructureSize)
 	f.Put(buf)
 
 	readF := File{}
 	readF.Read(buf)
 	if f != readF {
-		t.Error("%s != %s", readF, f)
+		t.Errorf("%v != %v", readF, f)
 	}
 }
 
@@ -29,7 +29,7 @@ func BenchmarkFile_Put(b *testing.B) {
 		Timestamp: time.Now().Unix(),
 		Offset: 66234,
 	}
-	buf := make([]byte, 8 * 4)
+	buf := make([]byte, FileStructureSize)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.Put(buf)
@@ -43,7 +43,7 @@ func BenchmarkFile_Read(b *testing.B) {
 		Timestamp: time.Now().Unix(),
 		Offset: 66234,
 	}
-	buf := make([]byte, 8 * 4)
+	buf := make([]byte, FileStructureSize)
 	f.Put(buf)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
