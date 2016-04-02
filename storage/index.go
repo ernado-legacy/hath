@@ -5,6 +5,24 @@ import (
 	"os"
 )
 
+// Link is index entry that links file id to offset, ID is key, Offset is value.
+//
+// Collection L = {L1, L2, ..., Ln} defines f(ID) -> Offset on id in L, so
+// L is an associative array (ID, Offset).
+type Link struct {
+	ID     int64 // -> File.ID
+	Offset int64 // -> File.Offset
+}
+
+// LinkStructureSize is minimum buf length required in Link.{Read,Put} and is 128 bit or 16 byte.
+const LinkStructureSize = 8 * 2
+
+// NewLinkBuffer is shorthand for new []byte slice with length LinkStructureSize
+// that is safe to pass as buffer to all Link-related Read/Write methods.
+func NewLinkBuffer() []byte {
+	return make([]byte, LinkStructureSize)
+}
+
 // An IndexBackend describes a backend that is used for index store.
 type IndexBackend interface {
 	ReadAt(b []byte, off int64) (int, error)
@@ -46,15 +64,6 @@ func (i Index) WriteBuff(l Link, b []byte) error {
 func getLinkOffset(id int64) int64 {
 	return id * LinkStructureSize
 }
-
-// Link is index entry that links file id to offset
-type Link struct {
-	ID     int64 // ID of file
-	Offset int64 // Offset for file in bulk
-}
-
-// LinkStructureSize is minimum buf length required in Link.{Read,Put} and is 128 bit or 16 byte.
-const LinkStructureSize = 8 * 2
 
 // Put link to byte slice using binary.Put(U)Variant for all fields, returns write size in bytes.
 func (l Link) Put(b []byte) int {

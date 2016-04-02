@@ -2,10 +2,29 @@ package storage
 
 import (
 	"bytes"
+	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 )
+
+func tempFile(t *testing.T) *os.File {
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
+		t.Fatal("tempFile:", err)
+	}
+	return f
+}
+
+func clearTempFile(f *os.File, t *testing.T) {
+	name := f.Name()
+	if err := f.Close(); err != nil {
+		t.Error(err)
+	}
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // memoryIndexBackend is in-memory backend for Index used in tests
 type memoryIndexBackend struct {
@@ -219,5 +238,26 @@ func BenchmarkIndex_Read(b *testing.B) {
 		if _, err := index.Read(3); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestIndexOsFile(t *testing.T) {
+	f := tempFile(t)
+	defer clearTempFile(f, t)
+	index := Index{Backend: f}
+	b := NewLinkBuffer()
+	expected := Link{
+		ID:     0,
+		Offset: 1234,
+	}
+	if err := index.WriteBuff(expected, b); err != nil {
+		t.Error(err)
+	}
+	l, err := index.Read(expected.ID)
+	if err != nil {
+		t.Error(err)
+	}
+	if l != expected {
+		t.Errorf("%v != %v", l, expected)
 	}
 }
