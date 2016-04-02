@@ -30,7 +30,7 @@ type File struct {
 // FileStructureSize is minimum buf length required in File.{Read,Put} and is 256 bit or 32 byte.
 const FileStructureSize = 8 * 4
 
-// Read file from byte slice using binary.Put(U)Variant for all fields, returns read size in bytes.
+// Read file from byte slice using binary.PutVariant for all fields, returns read size in bytes.
 func (f *File) Read(b []byte) int {
 	var offset, read int
 	f.ID, read = binary.Varint(b[offset:])
@@ -43,7 +43,7 @@ func (f *File) Read(b []byte) int {
 	return offset + read
 }
 
-// Put file to byte slice using binary.Put(U)Variant for all fields, returns write size in bytes.
+// Put file to byte slice using binary.PutVariant for all fields, returns write size in bytes.
 func (f File) Put(b []byte) int {
 	var offset int
 	offset += binary.PutVarint(b[offset:], f.ID)

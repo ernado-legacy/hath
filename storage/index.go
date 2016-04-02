@@ -65,7 +65,7 @@ func getLinkOffset(id int64) int64 {
 	return id * LinkStructureSize
 }
 
-// Put link to byte slice using binary.Put(U)Variant for all fields, returns write size in bytes.
+// Put link to byte slice using binary.PutVariant for all fields, returns write size in bytes.
 func (l Link) Put(b []byte) int {
 	var offset int
 	offset += binary.PutVarint(b[offset:], l.ID)
@@ -73,7 +73,7 @@ func (l Link) Put(b []byte) int {
 	return offset
 }
 
-// Read file from byte slice using binary.Put(U)Variant for all fields, returns read size in bytes.
+// Read file from byte slice using binary.PutVariant for all fields, returns read size in bytes.
 func (l *Link) Read(b []byte) int {
 	var offset, read int
 	l.ID, read = binary.Varint(b[offset:])
