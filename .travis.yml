@@ -1,7 +1,6 @@
 language: go
 go:
- - auto
- - tip
+ - 1.6
 
 before_install:
  - mkdir -p $HOME/gopath/src/cydev.ru/
