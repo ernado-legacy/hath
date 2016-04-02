@@ -17,7 +17,7 @@ type Index struct {
 	Backend IndexBackend
 }
 
-// ReadBuff returns Link with provided id, using b as buffer
+// ReadBuff returns Link with provided id using provided buffer during serialization
 func (i Index) ReadBuff(id int64, b []byte) (Link, error) {
 	l := Link{}
 	n, err := i.Backend.ReadAt(b, getLinkOffset(id))
@@ -26,6 +26,19 @@ func (i Index) ReadBuff(id int64, b []byte) (Link, error) {
 	}
 	l.Read(b[:n])
 	return l, nil
+}
+
+// Read returns Link with provided id
+func (i Index) Read(id int64) (Link, error) {
+	b := make([]byte, LinkStructureSize)
+	return i.ReadBuff(id, b)
+}
+
+// WriteBuff writes Link using provided buffer during deserialization
+func (i Index) WriteBuff(l Link, b []byte) error {
+	l.Put(b)
+	_, err := i.Backend.WriteAt(b, getLinkOffset(l.ID))
+	return err
 }
 
 // getLinkOffset returns offset in index for link with provided file id.

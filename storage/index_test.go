@@ -2,8 +2,58 @@ package storage
 
 import (
 	"bytes"
+	"os"
 	"testing"
+	"time"
 )
+
+// memoryIndexBackend is in-memory backend for Index used in tests
+type memoryIndexBackend struct {
+	name   string
+	buff   bytes.Buffer
+	reader bytes.Reader
+}
+
+func (m memoryIndexBackend) ReadAt(b []byte, off int64) (int, error) {
+	return m.reader.ReadAt(b, off)
+}
+
+func (m *memoryIndexBackend) WriteAt(b []byte, off int64) (int, error) {
+	n, err := m.buff.Write(b)
+	if err != nil {
+		return n, err
+	}
+	m.reader = *bytes.NewReader(m.buff.Bytes())
+	return n, nil
+}
+
+func (m memoryIndexBackend) Stat() (os.FileInfo, error) {
+	return m, nil
+}
+
+func (m memoryIndexBackend) Name() string {
+	return m.name
+}
+
+func (m memoryIndexBackend) Size() int64 {
+	return int64(m.buff.Len())
+}
+
+func (m memoryIndexBackend) Mode() os.FileMode {
+	return os.FileMode(0666)
+}
+
+func (m memoryIndexBackend) IsDir() bool {
+	return false
+}
+
+func (m memoryIndexBackend) Sys() interface{} {
+	return m.buff
+}
+
+func (m memoryIndexBackend) ModTime() time.Time {
+	return time.Time{}
+}
 
 func TestLink(t *testing.T) {
 	l := Link{
@@ -62,7 +112,9 @@ func TestIndex_ReadBuff(t *testing.T) {
 	for id = 0; id < 10; id++ {
 		tmpLink.ID = id
 		tmpLink.Put(buf)
-		backend.WriteAt(buf, getLinkOffset(id))
+		if _, err := backend.WriteAt(buf, getLinkOffset(id)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	backend.buff = *bytes.NewBuffer(buf)
 	index := Index{Backend: &backend}
@@ -73,7 +125,34 @@ func TestIndex_ReadBuff(t *testing.T) {
 	}
 	expected := Link{ID: 3, Offset: 125}
 	if l != expected {
-		t.Error("%v != %v", l, expected)
+		t.Errorf("%v != %v", l, expected)
+	}
+}
+
+func TestIndex_Read(t *testing.T) {
+	var backend memoryIndexBackend
+	buf := make([]byte, LinkStructureSize)
+	var id int64
+	tmpLink := Link{
+		ID:     0,
+		Offset: 125,
+	}
+	for id = 0; id < 10; id++ {
+		tmpLink.ID = id
+		tmpLink.Put(buf)
+		if _, err := backend.WriteAt(buf, getLinkOffset(id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	backend.buff = *bytes.NewBuffer(buf)
+	index := Index{Backend: &backend}
+	l, err := index.Read(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := Link{ID: 3, Offset: 125}
+	if l != expected {
+		t.Errorf("%v != %v", l, expected)
 	}
 }
 
@@ -88,7 +167,9 @@ func BenchmarkIndex_ReadBuff(b *testing.B) {
 	for id = 0; id < 10; id++ {
 		tmpLink.ID = id
 		tmpLink.Put(buf)
-		backend.WriteAt(buf, getLinkOffset(id))
+		if _, err := backend.WriteAt(buf, getLinkOffset(id)); err != nil {
+			b.Fatal(err)
+		}
 	}
 	backend.buff = *bytes.NewBuffer(buf)
 	index := Index{Backend: &backend}
@@ -98,10 +179,45 @@ func BenchmarkIndex_ReadBuff(b *testing.B) {
 	}
 	expected := Link{ID: 3, Offset: 125}
 	if l != expected {
-		b.Error("%v != %v", l, expected)
+		b.Errorf("%v != %v", l, expected)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		index.ReadBuff(3, buf)
+		if _, err := index.ReadBuff(3, buf); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkIndex_Read(b *testing.B) {
+	var backend memoryIndexBackend
+	buf := make([]byte, LinkStructureSize)
+	var id int64
+	tmpLink := Link{
+		ID:     0,
+		Offset: 125,
+	}
+	for id = 0; id < 10; id++ {
+		tmpLink.ID = id
+		tmpLink.Put(buf)
+		if _, err := backend.WriteAt(buf, getLinkOffset(id)); err != nil {
+			b.Fatal(err)
+		}
+	}
+	backend.buff = *bytes.NewBuffer(buf)
+	index := Index{Backend: &backend}
+	l, err := index.ReadBuff(3, buf)
+	if err != nil {
+		b.Fatal(err)
+	}
+	expected := Link{ID: 3, Offset: 125}
+	if l != expected {
+		b.Errorf("%v != %v", l, expected)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := index.Read(3); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
