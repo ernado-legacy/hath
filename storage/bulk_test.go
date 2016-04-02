@@ -42,6 +42,9 @@ func TestBulk_Read(t *testing.T) {
 		t.Errorf("%v != %v", fRead, f)
 	}
 	if int64(data.Len()) != f.Size {
-		t.Errorf("data.Len()")
+		t.Errorf("data.Len() %d != %d", data.Len(), f.Size)
+	}
+	if data.String() != s {
+		t.Errorf("%s != %d", data.String(), s)
 	}
 }
