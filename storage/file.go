@@ -41,6 +41,15 @@ type File struct {
 // FileStructureSize is minimum buf length required in File.{Read,Put} and is 256 bit or 32 byte.
 const FileStructureSize = 8 * 4
 
+// FileStructureBuffer is byte array of File structure size
+type FileStructureBuffer [FileStructureSize]byte
+
+// NewFileBuffer is shorthand for new []byte slice with length NewFileBuffer
+// that is safe to pass as buffer to all Link-related Read/Write methods.
+func NewFileBuffer() []byte {
+	return make([]byte, FileStructureSize)
+}
+
 // Read file from byte slice using binary.PutVariant for all fields, returns read size in bytes.
 func (f *File) Read(b []byte) int {
 	var offset, read int
