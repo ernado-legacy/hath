@@ -6,15 +6,15 @@ import (
 )
 
 func TestFile(t *testing.T) {
-	f := File{
+	f := Header{
 		ID:        1234,
 		Size:      33455,
 		Timestamp: time.Now().Unix(),
 		Offset:    66234,
 	}
-	buf := FileStructureBuffer{}
+	buf := HeaderStructureBuffer{}
 	f.Put(buf[:])
-	readF := File{}
+	readF := Header{}
 	readF.Read(buf[:])
 	if f != readF {
 		t.Errorf("%v != %v", readF, f)
@@ -22,13 +22,13 @@ func TestFile(t *testing.T) {
 }
 
 func BenchmarkFile_Put(b *testing.B) {
-	f := File{
+	f := Header{
 		ID:        1234,
 		Size:      33455,
 		Timestamp: time.Now().Unix(),
 		Offset:    66234,
 	}
-	buf := FileStructureBuffer{}
+	buf := HeaderStructureBuffer{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f.Put(buf[:])
@@ -36,13 +36,13 @@ func BenchmarkFile_Put(b *testing.B) {
 }
 
 func BenchmarkFile_Read(b *testing.B) {
-	f := File{
+	f := Header{
 		ID:        1234,
 		Size:      33455,
 		Timestamp: time.Now().Unix(),
 		Offset:    66234,
 	}
-	buf := FileStructureBuffer{}
+	buf := HeaderStructureBuffer{}
 	f.Put(buf[:])
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

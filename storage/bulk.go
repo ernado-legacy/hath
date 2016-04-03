@@ -1,9 +1,7 @@
 package storage
 
 import (
-	"bytes"
 	"errors"
-	"io"
 	"os"
 )
 
@@ -19,44 +17,41 @@ type BulkBackend interface {
 	Stat() (os.FileInfo, error)
 }
 
-type readerAtWrapper struct {
-	r   io.ReaderAt
-	off int64
-}
-
-func (r readerAtWrapper) Read(b []byte) (int, error) {
-	return r.r.ReadAt(b, r.off)
-}
-
-// WrapReaderAt returns io.Reader which performs ReadAt(b, off) on provided io.ReaderAt
-func WrapReaderAt(r io.ReaderAt, off int64) io.Reader {
-	return readerAtWrapper{r: r, off: off}
-}
-
 // Bulk is collection of data slices, prepended with File header. Implements basic operations on files.
 type Bulk struct {
 	Backend BulkBackend
 }
 
-// Read File from BulkBackend by Link, using provided buffer.
-// Returns File and error, if any. Stores data in buffer.
-func (b Bulk) Read(l Link, buf *bytes.Buffer) (File, error) {
-	buf.Reset()
+// ReadFile returns File and error, if any, reading File by Link from backend.
+func (b Bulk) ReadFile(l Link, buf []byte) (Header, error) {
 	var (
-		f       File
-		fBuffer FileStructureBuffer
+		f Header
 	)
 	f.ID = l.ID
 	f.Offset = l.Offset
-	_, err := b.Backend.ReadAt(fBuffer[:], l.Offset)
+	_, err := b.Backend.ReadAt(buf[:LinkStructureSize], l.Offset)
 	if err != nil {
 		return f, err
 	}
-	f.Read(fBuffer[:])
+	f.Read(buf[:LinkStructureSize])
 	if f.ID != l.ID {
 		return f, ErrIDMismatch
 	}
-	buf.Grow(int(f.Size))
-	_, err = buf.ReadFrom(WrapReaderAt(b.Backend, l.Offset+FileStructureSize))
 	return f, err
+}
+
+// ReadData reads f.Size bytes into buffer from f.DataOffset.
+func (b Bulk) ReadData(f Header, buf []byte) error {
+	buf = buf[:f.Size]
+	_, err := b.Backend.ReadAt(buf, f.DataOffset())
+	return err
+}
+
+func (b Bulk) Write(f Header, data []byte) error {
+	f.Put(data[:HeaderStructureSize])
+	if _, err := b.Backend.WriteAt(data[:HeaderStructureSize], f.Offset); err != nil {
+		return err
+	}
+	_, err := b.Backend.WriteAt(data, f.DataOffset())
+	return err
 }

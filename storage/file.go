@@ -15,43 +15,48 @@ import (
 	"encoding/binary"
 )
 
-// File represents a stored data, obtainable with ReadAt(data, File.Offset+FileStructureSize),
+// Header represents a stored data, obtainable with ReadAt(data, Header.Offset+HeaderStructureSize),
 // where len(data) >= Size.
 //
-// ReadAt(b, File.Offset) with len(b) = FileStructureSize will read serialized info, and File.Read(b)
+// ReadAt(b, Header.Offset) with len(b) = HeaderStructureSize will read serialized info, and Header.Read(b)
 // will read it into structure fields.
 //
 // Bulk element structure:
-//    |---------------------------------| -1
-//    |---------- File.Offset ----------| 0
-//    |     FileStructureSize bytes     |
-//    |           of File               |
-//    |-File.Offset + FileStructureSize-| 16
-//    |                                 |
-//    |         File.Size bytes         |
-//    |                                 |
-//    |---------------------------------| size + 16
-type File struct {
+//    |-----------------------------------------| -1
+//    |------------ Header.Offset --------------| 0
+//    |       HeaderStructureSize bytes         |
+//    |              of Header                  |
+//    |-- Header.Offset + HeaderStructureSize --| 16 // or Header.DataOffset()
+//    |                                         |
+//    |         Header.Size bytes               |
+//    |                                         |
+//    |-----------------------------------------| size + 16
+type Header struct {
 	ID        int64 // -> Link.ID
 	Offset    int64 // -> Link.Offset
 	Size      int64 // len(data)
 	Timestamp int64 // Time.Unix()
 }
 
-// FileStructureSize is minimum buf length required in File.{Read,Put} and is 256 bit or 32 byte.
-const FileStructureSize = 8 * 4
-
-// FileStructureBuffer is byte array of File structure size
-type FileStructureBuffer [FileStructureSize]byte
-
-// NewFileBuffer is shorthand for new []byte slice with length NewFileBuffer
-// that is safe to pass as buffer to all Link-related Read/Write methods.
-func NewFileBuffer() []byte {
-	return make([]byte, FileStructureSize)
+// DataOffset returns offset for data, associated with File
+func (f Header) DataOffset() int64 {
+	return f.Offset + HeaderStructureSize
 }
 
-// Read file from byte slice using binary.PutVariant for all fields, returns read size in bytes.
-func (f *File) Read(b []byte) int {
+// HeaderStructureSize is minimum buf length required in File.{Read,Put} and is 256 bit or 32 byte.
+const HeaderStructureSize = 8 * 4
+
+// HeaderStructureBuffer is byte array of File structure size
+type HeaderStructureBuffer [HeaderStructureSize]byte
+
+// NewHeaderBuffer is shorthand for new []byte slice with length NewFileBuffer
+// that is safe to pass as buffer to all Link-related Read/Write methods.
+func NewHeaderBuffer() []byte {
+	return make([]byte, HeaderStructureSize)
+}
+
+// Read header from byte slice using binary.PutVariant for all fields, returns read size in bytes.
+func (f *Header) Read(b []byte) int {
 	var offset, read int
 	f.ID, read = binary.Varint(b[offset:])
 	offset += read
@@ -63,8 +68,8 @@ func (f *File) Read(b []byte) int {
 	return offset + read
 }
 
-// Put file to byte slice using binary.PutVariant for all fields, returns write size in bytes.
-func (f File) Put(b []byte) int {
+// Put header to byte slice using binary.PutVariant for all fields, returns write size in bytes.
+func (f Header) Put(b []byte) int {
 	var offset int
 	offset += binary.PutVarint(b[offset:], f.ID)
 	offset += binary.PutVarint(b[offset:], f.Size)

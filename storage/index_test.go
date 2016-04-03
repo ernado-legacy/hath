@@ -26,18 +26,18 @@ func clearTempFile(f *os.File, t *testing.T) {
 	}
 }
 
-// memoryIndexBackend is in-memory backend for Index used in tests
-type memoryIndexBackend struct {
+// memoryBackend is in-memory file backend used in tests
+type memoryBackend struct {
 	name   string
 	buff   bytes.Buffer
 	reader bytes.Reader
 }
 
-func (m memoryIndexBackend) ReadAt(b []byte, off int64) (int, error) {
+func (m memoryBackend) ReadAt(b []byte, off int64) (int, error) {
 	return m.reader.ReadAt(b, off)
 }
 
-func (m *memoryIndexBackend) WriteAt(b []byte, off int64) (int, error) {
+func (m *memoryBackend) WriteAt(b []byte, off int64) (int, error) {
 	n, err := m.buff.Write(b)
 	if err != nil {
 		return n, err
@@ -46,31 +46,31 @@ func (m *memoryIndexBackend) WriteAt(b []byte, off int64) (int, error) {
 	return n, nil
 }
 
-func (m memoryIndexBackend) Stat() (os.FileInfo, error) {
+func (m memoryBackend) Stat() (os.FileInfo, error) {
 	return m, nil
 }
 
-func (m memoryIndexBackend) Name() string {
+func (m memoryBackend) Name() string {
 	return m.name
 }
 
-func (m memoryIndexBackend) Size() int64 {
+func (m memoryBackend) Size() int64 {
 	return int64(m.buff.Len())
 }
 
-func (m memoryIndexBackend) Mode() os.FileMode {
+func (m memoryBackend) Mode() os.FileMode {
 	return os.FileMode(0666)
 }
 
-func (m memoryIndexBackend) IsDir() bool {
+func (m memoryBackend) IsDir() bool {
 	return false
 }
 
-func (m memoryIndexBackend) Sys() interface{} {
+func (m memoryBackend) Sys() interface{} {
 	return m.buff
 }
 
-func (m memoryIndexBackend) ModTime() time.Time {
+func (m memoryBackend) ModTime() time.Time {
 	return time.Time{}
 }
 
@@ -121,7 +121,7 @@ func TestGetLink(t *testing.T) {
 }
 
 func TestIndex_ReadBuff(t *testing.T) {
-	var backend memoryIndexBackend
+	var backend memoryBackend
 	buf := make([]byte, LinkStructureSize)
 	var id int64
 	tmpLink := Link{
@@ -149,7 +149,7 @@ func TestIndex_ReadBuff(t *testing.T) {
 }
 
 func TestIndex_Read(t *testing.T) {
-	var backend memoryIndexBackend
+	var backend memoryBackend
 	buf := make([]byte, LinkStructureSize)
 	var id int64
 	tmpLink := Link{
@@ -165,7 +165,7 @@ func TestIndex_Read(t *testing.T) {
 	}
 	backend.buff = *bytes.NewBuffer(buf)
 	index := Index{Backend: &backend}
-	l, err := index.Read(3)
+	l, err := index.ReadBuff(3, make([]byte, LinkStructureSize))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestIndex_Read(t *testing.T) {
 }
 
 func BenchmarkIndex_ReadBuff(b *testing.B) {
-	var backend memoryIndexBackend
+	var backend memoryBackend
 	buf := make([]byte, LinkStructureSize)
 	var id int64
 	tmpLink := Link{
@@ -192,7 +192,7 @@ func BenchmarkIndex_ReadBuff(b *testing.B) {
 	}
 	backend.buff = *bytes.NewBuffer(buf)
 	index := Index{Backend: &backend}
-	l, err := index.ReadBuff(3, buf)
+	l, err := index.ReadBuff(3, make([]byte, LinkStructureSize))
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -203,39 +203,6 @@ func BenchmarkIndex_ReadBuff(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := index.ReadBuff(3, buf); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkIndex_Read(b *testing.B) {
-	var backend memoryIndexBackend
-	buf := make([]byte, LinkStructureSize)
-	var id int64
-	tmpLink := Link{
-		ID:     0,
-		Offset: 125,
-	}
-	for id = 0; id < 10; id++ {
-		tmpLink.ID = id
-		tmpLink.Put(buf)
-		if _, err := backend.WriteAt(buf, getLinkOffset(id)); err != nil {
-			b.Fatal(err)
-		}
-	}
-	backend.buff = *bytes.NewBuffer(buf)
-	index := Index{Backend: &backend}
-	l, err := index.ReadBuff(3, buf)
-	if err != nil {
-		b.Fatal(err)
-	}
-	expected := Link{ID: 3, Offset: 125}
-	if l != expected {
-		b.Errorf("%v != %v", l, expected)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := index.Read(3); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -253,7 +220,7 @@ func TestIndexOsFile(t *testing.T) {
 	if err := index.WriteBuff(expected, b); err != nil {
 		t.Error(err)
 	}
-	l, err := index.Read(expected.ID)
+	l, err := index.ReadBuff(expected.ID, make([]byte, LinkStructureSize))
 	if err != nil {
 		t.Error(err)
 	}

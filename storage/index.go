@@ -46,12 +46,6 @@ func (i Index) ReadBuff(id int64, b []byte) (Link, error) {
 	return l, nil
 }
 
-// Read returns Link with provided id
-func (i Index) Read(id int64) (Link, error) {
-	b := make([]byte, LinkStructureSize)
-	return i.ReadBuff(id, b)
-}
-
 // WriteBuff writes Link using provided buffer during deserialization
 func (i Index) WriteBuff(l Link, b []byte) error {
 	l.Put(b)
