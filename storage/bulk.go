@@ -24,20 +24,18 @@ type Bulk struct {
 
 // ReadHeader returns Header and error, if any, reading File by Link from backend.
 func (b Bulk) ReadHeader(l Link, buf []byte) (Header, error) {
-	var (
-		f Header
-	)
-	f.ID = l.ID
-	f.Offset = l.Offset
+	var h Header
+	h.ID = l.ID
+	h.Offset = l.Offset
 	_, err := b.Backend.ReadAt(buf[:LinkStructureSize], l.Offset)
 	if err != nil {
-		return f, err
+		return h, err
 	}
-	f.Read(buf[:LinkStructureSize])
-	if f.ID != l.ID {
-		return f, ErrIDMismatch
+	h.Read(buf[:LinkStructureSize])
+	if h.ID != l.ID {
+		return h, ErrIDMismatch
 	}
-	return f, err
+	return h, err
 }
 
 // ReadData reads h.Size bytes into buffer from f.DataOffset.
