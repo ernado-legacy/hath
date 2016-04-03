@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestFile(t *testing.T) {
+func TestHeader(t *testing.T) {
 	f := Header{
 		ID:        1234,
 		Size:      33455,
@@ -21,7 +21,7 @@ func TestFile(t *testing.T) {
 	}
 }
 
-func BenchmarkFile_Put(b *testing.B) {
+func BenchmarkHeader_Put(b *testing.B) {
 	f := Header{
 		ID:        1234,
 		Size:      33455,
@@ -35,7 +35,7 @@ func BenchmarkFile_Put(b *testing.B) {
 	}
 }
 
-func BenchmarkFile_Read(b *testing.B) {
+func BenchmarkHeader_Read(b *testing.B) {
 	f := Header{
 		ID:        1234,
 		Size:      33455,

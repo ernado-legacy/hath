@@ -38,42 +38,42 @@ type Header struct {
 	Timestamp int64 // Time.Unix()
 }
 
-// DataOffset returns offset for data, associated with File
-func (f Header) DataOffset() int64 {
-	return f.Offset + HeaderStructureSize
+// DataOffset returns offset for data, associated with Header
+func (h Header) DataOffset() int64 {
+	return h.Offset + HeaderStructureSize
 }
 
-// HeaderStructureSize is minimum buf length required in File.{Read,Put} and is 256 bit or 32 byte.
+// HeaderStructureSize is minimum buf length required in Header.{Read,Put} and is 256 bit or 32 byte.
 const HeaderStructureSize = 8 * 4
 
 // HeaderStructureBuffer is byte array of File structure size
 type HeaderStructureBuffer [HeaderStructureSize]byte
 
-// NewHeaderBuffer is shorthand for new []byte slice with length NewFileBuffer
+// NewHeaderBuffer is shorthand for new []byte slice with length HeaderStructureSize
 // that is safe to pass as buffer to all Link-related Read/Write methods.
 func NewHeaderBuffer() []byte {
 	return make([]byte, HeaderStructureSize)
 }
 
 // Read header from byte slice using binary.PutVariant for all fields, returns read size in bytes.
-func (f *Header) Read(b []byte) int {
+func (h *Header) Read(b []byte) int {
 	var offset, read int
-	f.ID, read = binary.Varint(b[offset:])
+	h.ID, read = binary.Varint(b[offset:])
 	offset += read
-	f.Size, read = binary.Varint(b[offset:])
+	h.Size, read = binary.Varint(b[offset:])
 	offset += read
-	f.Offset, read = binary.Varint(b[offset:])
+	h.Offset, read = binary.Varint(b[offset:])
 	offset += read
-	f.Timestamp, read = binary.Varint(b[offset:])
+	h.Timestamp, read = binary.Varint(b[offset:])
 	return offset + read
 }
 
 // Put header to byte slice using binary.PutVariant for all fields, returns write size in bytes.
-func (f Header) Put(b []byte) int {
+func (h Header) Put(b []byte) int {
 	var offset int
-	offset += binary.PutVarint(b[offset:], f.ID)
-	offset += binary.PutVarint(b[offset:], f.Size)
-	offset += binary.PutVarint(b[offset:], f.Offset)
-	offset += binary.PutVarint(b[offset:], f.Timestamp)
+	offset += binary.PutVarint(b[offset:], h.ID)
+	offset += binary.PutVarint(b[offset:], h.Size)
+	offset += binary.PutVarint(b[offset:], h.Offset)
+	offset += binary.PutVarint(b[offset:], h.Timestamp)
 	return offset
 }

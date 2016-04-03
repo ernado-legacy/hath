@@ -10,8 +10,8 @@ import (
 // Collection L = {L1, L2, ..., Ln} defines f(ID) -> Offset on id in L, so
 // L is an associative array (ID, Offset).
 type Link struct {
-	ID     int64 // -> File.ID
-	Offset int64 // -> File.Offset
+	ID     int64 // -> Header.ID
+	Offset int64 // -> Header.Offset
 }
 
 // LinkStructureSize is minimum buf length required in Link.{Read,Put} and is 128 bit or 16 byte.

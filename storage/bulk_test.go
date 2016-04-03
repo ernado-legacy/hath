@@ -34,23 +34,23 @@ func TestBulk_Read(t *testing.T) {
 		ID:     f.ID,
 		Offset: 0,
 	}
-	fBuf := make([]byte, 0, f.Size)
-	fRead, err := bulk.ReadFile(l, fBuf)
+	hBuf := make([]byte, 0, f.Size)
+	hRead, err := bulk.ReadHeader(l, hBuf)
 	if err != nil {
 		t.Error("bulk.ReadInfo", err)
 	}
-	if err := bulk.ReadData(fRead, fBuf); err != nil {
+	if err := bulk.ReadData(hRead, hBuf); err != nil {
 		t.Error("bulk.Read", err)
 	}
-	if fRead != f {
-		t.Errorf("%v != %v", fRead, f)
+	if hRead != f {
+		t.Errorf("%v != %v", hRead, f)
 	}
-	fBuf = fBuf[:fRead.Size]
-	if int64(len(fBuf)) != f.Size {
+	hBuf = hBuf[:hRead.Size]
+	if int64(len(hBuf)) != f.Size {
 		t.Errorf("data.Len() %d != %d", data.Len(), f.Size)
 	}
-	if string(fBuf) != s {
-		t.Errorf("%s != %s", string(fBuf), s)
+	if string(hBuf) != s {
+		t.Errorf("%s != %s", string(hBuf), s)
 	}
 }
 
@@ -60,36 +60,36 @@ func TestBulk_Write(t *testing.T) {
 	bulk := Bulk{Backend: backend}
 	s := "Data data data data data!"
 	data := bytes.NewBufferString(s)
-	f := Header{
+	h := Header{
 		Size:      int64(data.Len()),
 		Offset:    0,
 		Timestamp: time.Now().Unix(),
-		ID:        144,
+		ID:        0,
 	}
-	if err := bulk.Write(f, data.Bytes()); err != nil {
+	if err := bulk.Write(h, data.Bytes()); err != nil {
 		t.Fatal("bulk.Read", err)
 	}
 	l := Link{
-		ID:     f.ID,
+		ID:     h.ID,
 		Offset: 0,
 	}
-	fBuf := make([]byte, 0, f.Size)
-	fRead, err := bulk.ReadFile(l, fBuf)
+	hBuf := make([]byte, 0, h.Size)
+	hRead, err := bulk.ReadHeader(l, hBuf)
 	if err != nil {
 		t.Error("bulk.ReadInfo", err)
 	}
-	if err := bulk.ReadData(fRead, fBuf); err != nil {
+	if err := bulk.ReadData(hRead, hBuf); err != nil {
 		t.Error("bulk.Read", err)
 	}
-	if fRead != f {
-		t.Errorf("%v != %v", fRead, f)
+	if hRead != h {
+		t.Errorf("%v != %v", hRead, h)
 	}
-	fBuf = fBuf[:f.Size]
-	if int64(len(fBuf)) != f.Size {
-		t.Errorf("data.Len() %d != %d", data.Len(), f.Size)
+	hBuf = hBuf[:hRead.Size]
+	if int64(len(hBuf)) != hRead.Size {
+		t.Errorf("len(hBuf) %d != %d", len(hBuf), hRead.Size)
 	}
-	if string(fBuf) != s {
-		t.Errorf("%s != %s", string(fBuf), s)
+	if string(hBuf) != s {
+		t.Errorf("%s != %s", string(hBuf), s)
 	}
 }
 
@@ -124,15 +124,15 @@ func BenchmarkBulk_Read(b *testing.B) {
 		ID:     3,
 		Offset: (tmpHeader.Size + LinkStructureSize) * 3,
 	}
-	fBuf := make([]byte, 0, tmpHeader.Size)
+	hBuf := make([]byte, 0, tmpHeader.Size)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		fBuf = fBuf[:0]
-		fRead, err := bulk.ReadFile(l, fBuf)
+		hBuf = hBuf[:0]
+		fRead, err := bulk.ReadHeader(l, hBuf)
 		if err != nil {
 			b.Error("bulk.ReadInfo", err)
 		}
-		if err = bulk.ReadData(fRead, fBuf); err != nil {
+		if err = bulk.ReadData(fRead, hBuf); err != nil {
 			b.Error("bulk.Read", err)
 		}
 		if err != nil {

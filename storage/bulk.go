@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	// ErrIDMismatch returned when read File.ID is not equal to provided Link.ID and is possible data corruption.
-	ErrIDMismatch = errors.New("BulkBackend File.ID != Link.ID")
+	// ErrIDMismatch returned when read Header.ID is not equal to provided Link.ID and is possible data corruption.
+	ErrIDMismatch = errors.New("BulkBackend Header.ID != Link.ID")
 )
 
 // An BulkBackend describes a backend that is used for file store.
@@ -22,8 +22,8 @@ type Bulk struct {
 	Backend BulkBackend
 }
 
-// ReadFile returns File and error, if any, reading File by Link from backend.
-func (b Bulk) ReadFile(l Link, buf []byte) (Header, error) {
+// ReadHeader returns Header and error, if any, reading File by Link from backend.
+func (b Bulk) ReadHeader(l Link, buf []byte) (Header, error) {
 	var (
 		f Header
 	)
@@ -40,18 +40,26 @@ func (b Bulk) ReadFile(l Link, buf []byte) (Header, error) {
 	return f, err
 }
 
-// ReadData reads f.Size bytes into buffer from f.DataOffset.
-func (b Bulk) ReadData(f Header, buf []byte) error {
-	buf = buf[:f.Size]
-	_, err := b.Backend.ReadAt(buf, f.DataOffset())
+// ReadData reads h.Size bytes into buffer from f.DataOffset.
+func (b Bulk) ReadData(h Header, buf []byte) error {
+	buf = buf[:h.Size]
+	_, err := b.Backend.ReadAt(buf, h.DataOffset())
 	return err
 }
 
-func (b Bulk) Write(f Header, data []byte) error {
-	f.Put(data[:HeaderStructureSize])
-	if _, err := b.Backend.WriteAt(data[:HeaderStructureSize], f.Offset); err != nil {
+// Write returns error if any, writing Header and data to backend.
+func (b Bulk) Write(h Header, data []byte) error {
+	// saving first HeaderStructureSize bytes to temporary slice on stack
+	tmp := make([]byte, HeaderStructureSize)
+	copy(tmp, data[:HeaderStructureSize])
+
+	// serializing header to data, preventing heap escape
+	h.Put(data[:HeaderStructureSize])
+	if _, err := b.Backend.WriteAt(data[:HeaderStructureSize], h.Offset); err != nil {
 		return err
 	}
-	_, err := b.Backend.WriteAt(data, f.DataOffset())
+	// loading back first bytes and writing data
+	copy(data[:HeaderStructureSize], tmp)
+	_, err := b.Backend.WriteAt(data, h.DataOffset())
 	return err
 }
