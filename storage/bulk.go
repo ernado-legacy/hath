@@ -52,14 +52,14 @@ func (b Bulk) Write(h Header, data []byte) error {
 	// saving first HeaderStructureSize bytes to temporary slice on stack
 	tmp := make([]byte, HeaderStructureSize)
 	copy(tmp, data[:HeaderStructureSize])
-
 	// serializing header to data, preventing heap escape
 	h.Put(data[:HeaderStructureSize])
-	if _, err := b.Backend.WriteAt(data[:HeaderStructureSize], h.Offset); err != nil {
+	_, err := b.Backend.WriteAt(data[:HeaderStructureSize], h.Offset)
+	// loading back first bytes
+	copy(data[:HeaderStructureSize], tmp)
+	if err != nil {
 		return err
 	}
-	// loading back first bytes and writing data
-	copy(data[:HeaderStructureSize], tmp)
-	_, err := b.Backend.WriteAt(data, h.DataOffset())
+	_, err = b.Backend.WriteAt(data, h.DataOffset())
 	return err
 }
