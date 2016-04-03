@@ -30,3 +30,9 @@ hathd/hathd
 
 # build
 build
+
+# IDEA
+.idea
+
+# hath files
+hathd/hath
