@@ -2,11 +2,10 @@
 Hath client in golang
 
 [![Build status](https://ci.appveyor.com/api/projects/status/c4ft82569b5kd63p/branch/master?svg=true)](https://ci.appveyor.com/project/ernado/hath/branch/master)
-[![Build Status](https://travis-ci.org/cydev/hath.svg?branch=master)](https://travis-ci.org/cydev/hath)
-[![Build Status](https://ci.cydev.ru/api/badges/cydev/hath/status.svg)](https://ci.cydev.ru/cydev/hath)
-[![Coverage Status](https://coveralls.io/repos/cydev/hath/badge.svg)](https://coveralls.io/r/cydev/hath)
-[![GoDoc](https://godoc.org/cydev.ru/hath?status.svg)](https://godoc.org/cydev.ru/hath)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cydev/hath/blob/master/LICENSE)
+[![Build Status](https://travis-ci.org/ernado/hath.svg?branch=master)](https://travis-ci.org/ernado/hath)
+[![Coverage Status](https://coveralls.io/repos/cydev/hath/badge.svg)](https://coveralls.io/r/ernado/hath)
+[![GoDoc](https://godoc.org/github.com/ernado/hath?status.svg)](https://godoc.org/github.com/ernado/hath)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/ernado/hath/blob/master/LICENSE)
 
 ## Status
 Near alpha stage, client is already usable, but lacks testing
