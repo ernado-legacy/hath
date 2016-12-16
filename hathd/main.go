@@ -9,7 +9,7 @@ import (
 	"os"
 	"path"
 
-	"cydev.ru/hath"
+	"github.com/ernado/hath"
 
 	"github.com/BurntSushi/toml"
 	"github.com/gin-gonic/gin"

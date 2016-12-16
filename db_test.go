@@ -1,4 +1,4 @@
-package hath // import "cydev.ru/hath"
+package hath
 
 import (
 	"io/ioutil"

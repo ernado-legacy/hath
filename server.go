@@ -1,5 +1,5 @@
 // Package hath is Hentai@Home client implementation in golang
-package hath // import "cydev.ru/hath"
+package hath
 
 import (
 	"crypto/sha1"
